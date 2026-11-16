@@ -80,6 +80,7 @@ export function CommunityReportDialog({
       }}
     >
       <DialogTrigger
+        nativeButton={!trigger}
         render={
           trigger ?? (
             <Button variant="ghost" size="sm" className="text-muted-foreground">

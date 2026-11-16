@@ -224,7 +224,7 @@ export function CommunityPostComposerDialog({
         if (!next) resetState()
       }}
     >
-      <DialogTrigger render={trigger ?? defaultTrigger} />
+      <DialogTrigger nativeButton={!trigger} render={trigger ?? defaultTrigger} />
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <DialogHeader>

@@ -88,6 +88,7 @@ export function CommunityModerateHideDialog({
       }}
     >
       <DialogTrigger
+        nativeButton={!trigger}
         render={
           trigger ?? (
             <Button variant="destructive" size="sm">

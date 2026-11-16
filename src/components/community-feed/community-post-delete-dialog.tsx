@@ -58,6 +58,7 @@ export function CommunityPostDeleteDialog({
       }}
     >
       <DialogTrigger
+        nativeButton={!trigger}
         render={
           trigger ?? (
             <Button variant="ghost" size="sm" className="text-destructive">
