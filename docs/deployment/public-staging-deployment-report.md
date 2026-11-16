@@ -125,3 +125,4 @@ Setelah kode di-push ke branch `staging` di GitHub:
 5. **Update Supabase Auth URL**:
    - Buka Supabase Dashboard project `smart-rt-staging` → **Authentication** → **URL Configuration**.
    - Tambahkan URL Vercel yang didapatkan (misal: `https://smart-rt-staging.vercel.app` atau `https://*.vercel.app`) ke **Redirect URLs**.
+

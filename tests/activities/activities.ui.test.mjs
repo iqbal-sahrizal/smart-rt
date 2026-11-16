@@ -159,6 +159,21 @@ async function signInAndCollectCookieHeader(url, anonKey, email, password) {
 }
 
 async function startNextServer(port, envOverrides) {
+  // NEXT_PUBLIC_* variables are inlined into the compiled bundle at `next build`
+  // time, not read at runtime, so passing them only to the spawned `next start`
+  // process has no effect on an already-built `.next/` output. Rebuild first so
+  // the server's client/server auth storage key actually matches this test's
+  // local Supabase instance, regardless of what `.env.local` currently points
+  // at (e.g. a Cloud staging project). Without this, @supabase/ssr derives its
+  // cookie storage key from the project ref baked in at the last build, the
+  // test's signed-in cookie is named for the local ref, and every authenticated
+  // request fails with 401 (AuthSessionMissingError) before role checks run.
+  execFileSync("npx", ["next", "build"], {
+    cwd: ROOT,
+    env: { ...process.env, ...envOverrides },
+    stdio: ["ignore", "pipe", "pipe"],
+  })
+
   const proc = spawn("npx", ["next", "start", "-p", String(port)], {
     cwd: ROOT,
     env: { ...process.env, ...envOverrides },

@@ -6,6 +6,7 @@ import {
   ClipboardCheckIcon,
   FileSpreadsheetIcon,
   FileTextIcon,
+  ImageIcon,
   LandmarkIcon,
   LayoutDashboardIcon,
   MegaphoneIcon,
@@ -85,6 +86,13 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/pengaduan",
     icon: MessageSquareWarningIcon,
     section: "main",
+  },
+  {
+    title: "Feed Komunitas",
+    href: "/komunitas",
+    icon: ImageIcon,
+    section: "main",
+    requiredRoles: ["ketua_rt", "sekretaris", "pengurus"],
   },
   {
     title: "Surat Pengantar",
@@ -270,6 +278,12 @@ export const ADMIN_NAV_GROUPS: AdminNavEntry[] = [
         href: "/notifications",
         icon: BellIcon,
       },
+      {
+        title: "Feed Komunitas",
+        href: "/komunitas",
+        icon: ImageIcon,
+        requiredRoles: ["ketua_rt", "sekretaris", "pengurus"],
+      },
     ],
   },
   {
@@ -406,6 +420,7 @@ export function getRouteTitle(rawPathname: string): string {
   if (pathname === "/notifications") return "Pusat Notifikasi"
   if (pathname === "/pengaduan") return "Pengaduan Warga"
   if (/^\/pengaduan\/[^/]+$/.test(pathname)) return "Detail Pengaduan"
+  if (pathname === "/komunitas") return "Moderasi Feed Komunitas"
   if (pathname === "/surat") return "Surat Pengantar"
   if (pathname === "/surat/jenis") return "Jenis Surat"
   if (/^\/surat\/[^/]+$/.test(pathname)) return "Detail Permohonan Surat"
@@ -558,6 +573,9 @@ export function getAdminBreadcrumbs(rawPathname: string): BreadcrumbSegment[] {
       { label: "Pengaduan Warga", href: "/pengaduan" },
       { label: "Detail Pengaduan" },
     ]
+  }
+  if (pathname === "/komunitas") {
+    return [{ label: "Moderasi Feed Komunitas" }]
   }
   if (pathname === "/surat") {
     return [{ label: "Surat Pengantar" }]

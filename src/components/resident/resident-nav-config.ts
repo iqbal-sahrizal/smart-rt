@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react"
 import {
   ClipboardListIcon,
   HomeIcon,
+  ImageIcon,
   MegaphoneIcon,
   UserIcon,
   WalletIcon,
@@ -18,6 +19,11 @@ export const RESIDENT_NAV_ITEMS: ResidentNavItem[] = [
     label: "Beranda",
     href: "/resident",
     icon: HomeIcon,
+  },
+  {
+    label: "Feed",
+    href: "/resident/feed",
+    icon: ImageIcon,
   },
   {
     label: "Tagihan",

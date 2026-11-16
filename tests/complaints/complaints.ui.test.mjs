@@ -310,11 +310,11 @@ test("Complaints Admin UI source hygiene: no select('*'), no service_role, no re
   )
 })
 
-test("Step 13.4 Resident bottom navigation stays at 5 slots and highlights Layanan on /resident/complaints*", () => {
-  assert.equal(residentNavConfig.RESIDENT_NAV_ITEMS.length, 5)
+test("Step 13.4 Resident bottom navigation stays at 6 slots and highlights Layanan on /resident/complaints*", () => {
+  assert.equal(residentNavConfig.RESIDENT_NAV_ITEMS.length, 6)
   assert.deepEqual(
     residentNavConfig.RESIDENT_NAV_ITEMS.map((item) => item.label),
-    ["Beranda", "Tagihan", "Pengumuman", "Layanan", "Profil"]
+    ["Beranda", "Feed", "Tagihan", "Pengumuman", "Layanan", "Profil"]
   )
 
   const paths = [

@@ -18,7 +18,7 @@ export function ResidentBottomNav() {
       aria-label="Navigasi Utama Warga"
       className="fixed inset-x-0 bottom-0 z-[var(--z-sticky)] border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xs md:hidden"
     >
-      <div className="mx-auto grid max-w-lg grid-cols-5 px-0.5 py-[var(--space-1-5)] sm:px-[var(--space-1)]">
+      <div className="mx-auto grid max-w-lg grid-cols-6 px-0.5 py-[var(--space-1-5)] sm:px-[var(--space-1)]">
         {RESIDENT_NAV_ITEMS.map((item) => {
           const active = isResidentRouteActive(pathname, item.href)
           const Icon = item.icon

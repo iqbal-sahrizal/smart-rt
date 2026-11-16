@@ -120,8 +120,8 @@ test("Admin sidebar navigation exposes Jadwal Ronda to all admin roles and handl
   )
 })
 
-test("Resident bottom nav preserves 5 slots and highlights Layanan when viewing /resident/ronda routes", () => {
-  assert.equal(residentNavConfig.RESIDENT_NAV_ITEMS.length, 5)
+test("Resident bottom nav preserves 6 slots and highlights Layanan when viewing /resident/ronda routes", () => {
+  assert.equal(residentNavConfig.RESIDENT_NAV_ITEMS.length, 6)
   assert.equal(
     residentNavConfig.isResidentRouteActive("/resident/ronda", "/resident/layanan"),
     true

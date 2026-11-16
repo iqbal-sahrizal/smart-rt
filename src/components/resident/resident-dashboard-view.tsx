@@ -7,6 +7,7 @@ import {
   ChevronRightIcon,
   FileTextIcon,
   HomeIcon,
+  ImageIcon,
   InboxIcon,
   MapPinIcon,
   MegaphoneIcon,
@@ -62,6 +63,12 @@ import {
 } from "@/lib/residents/types"
 
 const QUICK_ACTIONS = [
+  {
+    label: "Feed Komunitas",
+    description: "Bagikan momen warga",
+    href: "/resident/feed",
+    icon: ImageIcon,
+  },
   {
     label: "Tagihan Iuran",
     description: "Cek & bayar iuran",

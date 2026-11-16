@@ -184,12 +184,13 @@ test("Admin navigation enforces role visibility for /surat and resolves routes &
   )
 })
 
-test("Resident bottom navigation keeps exact 5 slots and highlights Layanan on /resident/letters routes", () => {
-  assert.equal(residentNav.RESIDENT_NAV_ITEMS.length, 5)
+test("Resident bottom navigation keeps exact 6 slots and highlights Layanan on /resident/letters routes", () => {
+  assert.equal(residentNav.RESIDENT_NAV_ITEMS.length, 6)
   assert.deepEqual(
     residentNav.RESIDENT_NAV_ITEMS.map((i) => i.href),
     [
       "/resident",
+      "/resident/feed",
       "/resident/bills",
       "/resident/announcements",
       "/resident/layanan",
