@@ -87,7 +87,7 @@ test("Admin grouped navigation defines Dashboard direct link and domain groups w
   const allHrefs = groups.flatMap((g) =>
     g.kind === "link" ? [g.href] : g.items.map((i) => i.href)
   )
-  assert.equal(allHrefs.includes("/pengaturan"), false)
+  assert.ok(allHrefs.includes("/pengaturan"))
   assert.ok(allHrefs.includes("/residents"))
   assert.ok(allHrefs.includes("/resident-invitations"))
   assert.ok(allHrefs.includes("/dues"))

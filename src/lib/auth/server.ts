@@ -32,6 +32,7 @@ interface RawTenantRow {
   rt_number: string
   rw_number: string
   status: string
+  settings?: Record<string, unknown> | null
   deleted_at: string | null
 }
 
@@ -89,6 +90,7 @@ export async function getAuthContext(): Promise<AuthContextData | null> {
             rt_number,
             rw_number,
             status,
+            settings,
             deleted_at
           ),
           member_roles (
@@ -156,6 +158,12 @@ export async function getAuthContext(): Promise<AuthContextData | null> {
     }
 
     const roles = Array.from(roleSet)
+    const tenantSettings = (tenant.settings ?? {}) as Record<string, unknown>
+    const tenantLogoUrl =
+      typeof tenantSettings.logo_url === "string" && tenantSettings.logo_url.trim() !== ""
+        ? tenantSettings.logo_url.trim()
+        : null
+
     memberships.push({
       memberId: row.id,
       tenantId: tenant.id,
@@ -167,6 +175,7 @@ export async function getAuthContext(): Promise<AuthContextData | null> {
       roles,
       hasAdminRole: hasAdminRole(roles),
       hasResidentRole: hasResidentRole(roles),
+      tenantLogoUrl,
     })
   }
 

@@ -19,6 +19,7 @@ import { PageContainer, PageHeader } from "@/components/layout/page-container"
 import { LetterDocumentViewer } from "@/components/letters/letter-document-viewer"
 import { LetterIssueDialog } from "@/components/letters/letter-issue-dialog"
 import { LetterReviewDialog } from "@/components/letters/letter-review-dialog"
+import { LetterOfficialHeader } from "@/components/letters/letter-official-header"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -215,6 +216,12 @@ export function LettersAdminDetailView({
               )}
             </CardContent>
           </Card>
+
+          {/* Official Letterhead */}
+          <LetterOfficialHeader
+            letterTitle={request.letterTypeName}
+            letterNumber={request.letterNumber}
+          />
 
           {/* Private Documents Section (Never fetches proxy when isMetadataOnly) */}
           <LetterDocumentViewer

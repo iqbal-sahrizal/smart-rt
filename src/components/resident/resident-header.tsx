@@ -61,7 +61,12 @@ export function ResidentHeader({ user }: ResidentHeaderProps) {
           href="/resident"
           className="min-w-0 shrink rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/25"
         >
-          <SmartRtLogo badgeText="Warga" subtitle={displaySubtitle} />
+          <SmartRtLogo
+            badgeText="Warga"
+            title={displayTenant}
+            subtitle={displaySubtitle}
+            logoUrl={user?.tenantLogoUrl}
+          />
         </Link>
 
         {/* Desktop Inline Navigation */}

@@ -191,6 +191,7 @@ export function toAdminShellUserInfo(
     roles: adminRoles,
     tenantName: tenant.tenantName,
     tenantSubtitle: `RT ${tenant.rtNumber} / RW ${tenant.rwNumber}`,
+    tenantLogoUrl: tenant.tenantLogoUrl,
     hasMultipleWorkspaces: ctx.workspaceOptions.length > 1,
   }
 }
@@ -207,6 +208,7 @@ export function toResidentShellUserInfo(
     roleLabel: ROLE_LABELS.warga,
     tenantName: tenant.tenantName,
     tenantSubtitle: `RT ${tenant.rtNumber} / RW ${tenant.rwNumber}`,
+    tenantLogoUrl: tenant.tenantLogoUrl,
     hasMultipleWorkspaces: ctx.workspaceOptions.length > 1,
   }
 }

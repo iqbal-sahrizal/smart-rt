@@ -39,6 +39,7 @@ export interface ActiveTenantMembership {
   roles: RoleCode[]
   hasAdminRole: boolean
   hasResidentRole: boolean
+  tenantLogoUrl?: string | null
 }
 
 export interface WorkspaceOption {
@@ -74,6 +75,7 @@ export interface ShellUserInfo {
   roles?: RoleCode[]
   tenantName: string
   tenantSubtitle: string
+  tenantLogoUrl?: string | null
   hasMultipleWorkspaces: boolean
 }
 

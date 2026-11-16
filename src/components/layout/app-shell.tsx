@@ -31,6 +31,8 @@ export function AppShell({ children, user, navBadges }: AppShellProps) {
         collapsed={collapsed}
         onToggleCollapse={() => setCollapsed((prev) => !prev)}
         tenantSubtitle={user?.tenantSubtitle}
+        tenantName={user?.tenantName}
+        tenantLogoUrl={user?.tenantLogoUrl}
         userRoles={user?.roles}
         navBadges={navBadges}
       />
@@ -43,7 +45,11 @@ export function AppShell({ children, user, navBadges }: AppShellProps) {
             <SheetDescription className="sr-only">
               Main navigation menu for Smart RT Admin Dashboard
             </SheetDescription>
-            <SmartRtLogo subtitle={user?.tenantSubtitle} />
+            <SmartRtLogo
+              subtitle={user?.tenantSubtitle}
+              title={user?.tenantName}
+              logoUrl={user?.tenantLogoUrl}
+            />
           </SheetHeader>
           <SidebarNav
             onNavigate={() => setMobileOpen(false)}

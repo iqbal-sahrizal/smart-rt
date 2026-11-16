@@ -272,6 +272,13 @@ export const ADMIN_NAV_GROUPS: AdminNavEntry[] = [
       },
     ],
   },
+  {
+    kind: "link",
+    id: "pengaturan",
+    title: "Pengaturan Lingkungan",
+    href: "/pengaturan",
+    icon: SettingsIcon,
+  },
 ]
 
 export function normalizeAdminPathname(pathname: string): string {
@@ -539,6 +546,9 @@ export function getAdminBreadcrumbs(rawPathname: string): BreadcrumbSegment[] {
   }
   if (pathname === "/notifications") {
     return [{ label: "Notifikasi" }]
+  }
+  if (pathname === "/pengaturan") {
+    return [{ label: "Pengaturan Lingkungan RT" }]
   }
   if (pathname === "/pengaduan") {
     return [{ label: "Pengaduan Warga" }]

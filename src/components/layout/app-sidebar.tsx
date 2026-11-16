@@ -359,6 +359,8 @@ interface AppSidebarProps {
   collapsed: boolean
   onToggleCollapse: () => void
   tenantSubtitle?: string
+  tenantName?: string
+  tenantLogoUrl?: string | null
   userRoles?: readonly RoleCode[]
   navBadges?: Partial<Record<string, string>>
 }
@@ -367,6 +369,8 @@ export function AppSidebar({
   collapsed,
   onToggleCollapse,
   tenantSubtitle,
+  tenantName,
+  tenantLogoUrl,
   userRoles,
   navBadges,
 }: AppSidebarProps) {
@@ -391,7 +395,12 @@ export function AppSidebar({
           href="/"
           className="rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/25"
         >
-          <SmartRtLogo collapsed={collapsed} subtitle={tenantSubtitle} />
+          <SmartRtLogo
+            collapsed={collapsed}
+            subtitle={tenantSubtitle}
+            title={tenantName}
+            logoUrl={tenantLogoUrl}
+          />
         </Link>
 
         {!collapsed && (

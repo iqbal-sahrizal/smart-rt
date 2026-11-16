@@ -16,6 +16,7 @@ import {
 import { toast } from "sonner"
 
 import { LetterDocumentViewer } from "@/components/letters/letter-document-viewer"
+import { LetterOfficialHeader } from "@/components/letters/letter-official-header"
 import { ResidentContainer } from "@/components/resident/resident-container"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -334,6 +335,12 @@ export function ResidentLetterDetailView({
           <span>{uploadError}</span>
         </div>
       )}
+
+      {/* Official Letterhead */}
+      <LetterOfficialHeader
+        letterTitle={request.letterTypeName}
+        letterNumber={request.letterNumber}
+      />
 
       {/* Documents & Issued PDF */}
       <LetterDocumentViewer
