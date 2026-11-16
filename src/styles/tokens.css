@@ -1,0 +1,363 @@
+/* ==========================================================================
+   Smart RT Design System — Global Design Tokens
+   Direction: Premium Minimalist SaaS (Linear / Stripe / Modern Fintech)
+   ========================================================================== */
+
+:root {
+  /* ------------------------------------------------------------------------
+     1. Primitive Palette
+     ------------------------------------------------------------------------ */
+  --palette-blue-50: #eff6ff;
+  --palette-blue-100: #dbeafe;
+  --palette-blue-200: #bfdbfe;
+  --palette-blue-500: #3b82f6;
+  --palette-blue-600: #2563eb;
+  --palette-blue-700: #1d4ed8;
+  --palette-blue-800: #1e40af;
+
+  --palette-navy-900: #172554;
+  --palette-navy-950: #0f172a;
+
+  --palette-teal-50: #f0fdfa;
+  --palette-teal-100: #ccfbf1;
+  --palette-teal-500: #14b8a6;
+  --palette-teal-600: #0d9488;
+  --palette-teal-700: #0f766e;
+  --palette-teal-800: #115e59;
+
+  --palette-slate-50: #f8fafc;
+  --palette-slate-100: #f1f5f9;
+  --palette-slate-200: #e2e8f0;
+  --palette-slate-300: #cbd5e1;
+  --palette-slate-400: #94a3b8;
+  --palette-slate-500: #64748b;
+  --palette-slate-600: #475569;
+  --palette-slate-700: #334155;
+  --palette-slate-800: #1e293b;
+  --palette-slate-900: #0f172a;
+  --palette-slate-950: #090e1a;
+
+  --palette-amber-50: #fffbeb;
+  --palette-amber-200: #fde68a;
+  --palette-amber-600: #d97706;
+  --palette-amber-700: #b45309;
+
+  --palette-red-50: #fef2f2;
+  --palette-red-200: #fecaca;
+  --palette-red-500: #ef4444;
+  --palette-red-600: #dc2626;
+  --palette-red-700: #b91c1c;
+
+  --palette-white: #ffffff;
+
+  /* ------------------------------------------------------------------------
+     2. Semantic Colors — Light Theme (Default)
+     ------------------------------------------------------------------------ */
+  /* Surfaces */
+  --background: var(--palette-slate-50);       /* #F8FAFC */
+  --foreground: var(--palette-slate-900);      /* #0F172A */
+  --foreground-secondary: var(--palette-slate-700);
+  --foreground-subtle: var(--palette-slate-400);
+
+  --surface: var(--palette-white);             /* #FFFFFF */
+  --surface-subtle: var(--palette-slate-100);
+  --surface-elevated: var(--palette-white);
+
+  --card: var(--palette-white);
+  --card-foreground: var(--palette-slate-900);
+
+  --popover: var(--palette-white);
+  --popover-foreground: var(--palette-slate-900);
+
+  /* Brand & Accents */
+  --primary: var(--palette-blue-600);          /* #2563EB */
+  --primary-hover: var(--palette-blue-700);
+  --primary-active: var(--palette-blue-800);
+  --primary-foreground: var(--palette-white);
+  --primary-subtle: var(--palette-blue-50);
+  --primary-border: var(--palette-blue-200);
+
+  --navy: var(--palette-navy-900);             /* #172554 */
+  --navy-foreground: var(--palette-slate-50);
+
+  --secondary: var(--palette-slate-100);
+  --secondary-hover: var(--palette-slate-200);
+  --secondary-foreground: var(--palette-slate-900);
+
+  --muted: var(--palette-slate-100);
+  --muted-foreground: var(--palette-slate-500); /* #64748B */
+
+  --accent: var(--palette-teal-600);           /* #0D9488 */
+  --accent-hover: var(--palette-teal-700);
+  --accent-foreground: var(--palette-white);
+  --accent-subtle: var(--palette-teal-50);
+  --accent-text: var(--palette-teal-800);      /* AA+ accessible text on light teal */
+  --accent-border: var(--palette-teal-100);
+
+  /* Status */
+  --success: var(--palette-teal-600);
+  --success-foreground: var(--palette-white);
+  --success-subtle: var(--palette-teal-50);
+  --success-text: var(--palette-teal-800);
+  --success-border: var(--palette-teal-100);
+
+  --warning: var(--palette-amber-600);
+  --warning-foreground: var(--palette-white);
+  --warning-subtle: var(--palette-amber-50);
+  --warning-text: var(--palette-amber-700);
+  --warning-border: var(--palette-amber-200);
+
+  --destructive: var(--palette-red-600);
+  --destructive-foreground: var(--palette-white);
+  --destructive-subtle: var(--palette-red-50);
+  --destructive-text: var(--palette-red-700);
+  --destructive-border: var(--palette-red-200);
+
+  --info: var(--palette-blue-600);
+  --info-foreground: var(--palette-white);
+  --info-subtle: var(--palette-blue-50);
+  --info-text: var(--palette-blue-700);
+  --info-border: var(--palette-blue-200);
+
+  /* Borders & Focus */
+  --border: var(--palette-slate-200);          /* #E2E8F0 */
+  --border-subtle: var(--palette-slate-100);
+  --border-strong: var(--palette-slate-300);
+  --input: var(--palette-slate-200);
+  --ring: var(--palette-blue-600);
+
+  /* Sidebar */
+  --sidebar: var(--palette-white);
+  --sidebar-foreground: var(--palette-slate-900);
+  --sidebar-primary: var(--palette-blue-600);
+  --sidebar-primary-foreground: var(--palette-white);
+  --sidebar-accent: var(--palette-slate-100);
+  --sidebar-accent-foreground: var(--palette-slate-900);
+  --sidebar-border: var(--palette-slate-200);
+  --sidebar-ring: var(--palette-blue-600);
+
+  /* Charts (Data Visualization) */
+  --chart-1: var(--palette-blue-600);
+  --chart-2: var(--palette-teal-600);
+  --chart-3: var(--palette-navy-900);
+  --chart-4: var(--palette-blue-500);
+  --chart-5: var(--palette-slate-400);
+
+  /* ------------------------------------------------------------------------
+     3. Typography Tokens
+     ------------------------------------------------------------------------ */
+  --font-sans-stack: var(--font-inter), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono-stack: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  --text-xs: 0.75rem;      /* 12px */
+  --text-sm: 0.875rem;     /* 14px */
+  --text-base: 0.9375rem;  /* 15px — crisp SaaS body default */
+  --text-md: 1rem;         /* 16px */
+  --text-lg: 1.125rem;     /* 18px */
+  --text-xl: 1.25rem;      /* 20px */
+  --text-2xl: 1.5rem;      /* 24px */
+  --text-3xl: 1.875rem;    /* 30px */
+  --text-4xl: 2.25rem;     /* 36px */
+
+  --leading-tight: 1.2;
+  --leading-snug: 1.35;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.625;
+
+  --tracking-tight: -0.02em;
+  --tracking-snug: -0.01em;
+  --tracking-normal: 0em;
+  --tracking-wide: 0.04em;
+
+  /* ------------------------------------------------------------------------
+     4. Spacing Scale (4px Base Grid)
+     ------------------------------------------------------------------------ */
+  --space-0: 0rem;
+  --space-0-5: 0.125rem;   /* 2px */
+  --space-1: 0.25rem;      /* 4px */
+  --space-1-5: 0.375rem;   /* 6px */
+  --space-2: 0.5rem;       /* 8px */
+  --space-2-5: 0.625rem;   /* 10px */
+  --space-3: 0.75rem;      /* 12px */
+  --space-4: 1rem;         /* 16px */
+  --space-5: 1.25rem;      /* 20px */
+  --space-6: 1.5rem;       /* 24px */
+  --space-8: 2rem;         /* 32px */
+  --space-10: 2.5rem;      /* 40px */
+  --space-12: 3rem;        /* 48px */
+  --space-16: 4rem;        /* 64px */
+  --space-20: 5rem;        /* 80px */
+  --space-24: 6rem;        /* 96px */
+
+  /* Semantic Layout Spacing */
+  --space-page-x: var(--space-6);
+  --space-page-y: var(--space-6);
+  --space-section: var(--space-8);
+  --space-card: var(--space-6);
+  --space-card-compact: var(--space-4);
+  --space-stack-sm: var(--space-2);
+  --space-stack-md: var(--space-4);
+  --space-stack-lg: var(--space-6);
+
+  /* ------------------------------------------------------------------------
+     5. Border Radius (12–16px Core System)
+     ------------------------------------------------------------------------ */
+  --radius: 0.75rem;       /* 12px base */
+  --radius-xs: 0.375rem;   /* 6px — micro badges */
+  --radius-sm: 0.5rem;     /* 8px — compact pills/tags */
+  --radius-md: 0.75rem;    /* 12px — buttons, inputs, small cards */
+  --radius-lg: 0.875rem;   /* 14px — standard cards, popovers */
+  --radius-xl: 1rem;       /* 16px — modals, feature containers */
+  --radius-2xl: 1.25rem;   /* 20px — hero/sheet shells */
+  --radius-full: 9999px;
+
+  /* ------------------------------------------------------------------------
+     6. Elevation & Minimal Shadows
+     ------------------------------------------------------------------------ */
+  --shadow-none: none;
+  --shadow-xs: 0 1px 2px 0 rgb(15 23 42 / 0.04);
+  --shadow-sm: 0 1px 3px 0 rgb(15 23 42 / 0.05), 0 1px 2px -1px rgb(15 23 42 / 0.04);
+  --shadow-md: 0 4px 12px -2px rgb(15 23 42 / 0.06), 0 2px 6px -2px rgb(15 23 42 / 0.04);
+  --shadow-lg: 0 12px 24px -4px rgb(15 23 42 / 0.08), 0 4px 8px -2px rgb(15 23 42 / 0.03);
+  --shadow-focus: 0 0 0 3px rgb(37 99 235 / 0.16);
+  --shadow-focus-destructive: 0 0 0 3px rgb(220 38 38 / 0.16);
+
+  /* ------------------------------------------------------------------------
+     7. Component Sizing & Layout Dimensions
+     ------------------------------------------------------------------------ */
+  --size-control-xs: 1.75rem;   /* 28px */
+  --size-control-sm: 2rem;      /* 32px */
+  --size-control-md: 2.25rem;   /* 36px — default button/input */
+  --size-control-lg: 2.5rem;    /* 40px */
+  --size-control-xl: 2.75rem;   /* 44px — touch target */
+
+  --size-icon-xs: 0.75rem;      /* 12px */
+  --size-icon-sm: 0.875rem;     /* 14px */
+  --size-icon-md: 1rem;         /* 16px — default */
+  --size-icon-lg: 1.25rem;      /* 20px */
+  --size-icon-xl: 1.5rem;       /* 24px */
+
+  --size-avatar-sm: 1.75rem;    /* 28px */
+  --size-avatar-md: 2.25rem;    /* 36px */
+  --size-avatar-lg: 2.75rem;    /* 44px */
+
+  --size-sidebar: 16rem;        /* 256px */
+  --size-sidebar-collapsed: 4rem; /* 64px */
+  --size-topbar: 3.75rem;       /* 60px */
+
+  --container-sm: 40rem;        /* 640px */
+  --container-md: 56rem;        /* 896px */
+  --container-lg: 75rem;        /* 1200px */
+  --container-xl: 85rem;        /* 1360px */
+
+  /* ------------------------------------------------------------------------
+     8. Motion & Z-Index
+     ------------------------------------------------------------------------ */
+  --duration-fast: 150ms;
+  --duration-normal: 200ms;
+  --duration-slow: 300ms;
+  --ease-default: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --z-base: 0;
+  --z-sticky: 20;
+  --z-overlay: 40;
+  --z-modal: 50;
+  --z-toast: 60;
+}
+
+/* ==========================================================================
+   Dark Theme Tokens (Prepared for Future Use)
+   ========================================================================== */
+.dark {
+  --background: var(--palette-slate-950);      /* #090E1A */
+  --foreground: var(--palette-slate-50);       /* #F8FAFC */
+  --foreground-secondary: var(--palette-slate-300);
+  --foreground-subtle: var(--palette-slate-500);
+
+  --surface: var(--palette-slate-900);         /* #0F172A */
+  --surface-subtle: var(--palette-slate-800);  /* #1E293B */
+  --surface-elevated: #162033;
+
+  --card: var(--palette-slate-900);
+  --card-foreground: var(--palette-slate-50);
+
+  --popover: #162033;
+  --popover-foreground: var(--palette-slate-50);
+
+  --primary: var(--palette-blue-500);          /* #3B82F6 — lifted for dark contrast */
+  --primary-hover: var(--palette-blue-600);
+  --primary-active: var(--palette-blue-700);
+  --primary-foreground: var(--palette-white);
+  --primary-subtle: rgb(59 130 246 / 0.14);
+  --primary-border: rgb(59 130 246 / 0.28);
+
+  --navy: var(--palette-navy-900);
+  --navy-foreground: var(--palette-slate-50);
+
+  --secondary: var(--palette-slate-800);
+  --secondary-hover: var(--palette-slate-700);
+  --secondary-foreground: var(--palette-slate-100);
+
+  --muted: var(--palette-slate-800);
+  --muted-foreground: var(--palette-slate-400);
+
+  --accent: var(--palette-teal-500);           /* #14B8A6 */
+  --accent-hover: var(--palette-teal-600);
+  --accent-foreground: var(--palette-slate-950);
+  --accent-subtle: rgb(20 184 166 / 0.14);
+  --accent-text: #5eead4;
+  --accent-border: rgb(20 184 166 / 0.28);
+
+  --success: var(--palette-teal-500);
+  --success-foreground: var(--palette-slate-950);
+  --success-subtle: rgb(20 184 166 / 0.14);
+  --success-text: #5eead4;
+  --success-border: rgb(20 184 166 / 0.28);
+
+  --warning: #f59e0b;
+  --warning-foreground: var(--palette-slate-950);
+  --warning-subtle: rgb(245 158 11 / 0.14);
+  --warning-text: #fcd34d;
+  --warning-border: rgb(245 158 11 / 0.28);
+
+  --destructive: var(--palette-red-500);
+  --destructive-foreground: var(--palette-white);
+  --destructive-subtle: rgb(239 68 68 / 0.14);
+  --destructive-text: #fca5a5;
+  --destructive-border: rgb(239 68 68 / 0.28);
+
+  --info: var(--palette-blue-500);
+  --info-foreground: var(--palette-white);
+  --info-subtle: rgb(59 130 246 / 0.14);
+  --info-text: #93c5fd;
+  --info-border: rgb(59 130 246 / 0.28);
+
+  --border: rgb(148 163 184 / 0.16);
+  --border-subtle: rgb(148 163 184 / 0.08);
+  --border-strong: rgb(148 163 184 / 0.28);
+  --input: rgb(148 163 184 / 0.2);
+  --ring: var(--palette-blue-500);
+
+  --sidebar: var(--palette-slate-900);
+  --sidebar-foreground: var(--palette-slate-50);
+  --sidebar-primary: var(--palette-blue-500);
+  --sidebar-primary-foreground: var(--palette-white);
+  --sidebar-accent: var(--palette-slate-800);
+  --sidebar-accent-foreground: var(--palette-slate-50);
+  --sidebar-border: rgb(148 163 184 / 0.16);
+  --sidebar-ring: var(--palette-blue-500);
+
+  --chart-1: var(--palette-blue-500);
+  --chart-2: var(--palette-teal-500);
+  --chart-3: #60a5fa;
+  --chart-4: #2dd4bf;
+  --chart-5: var(--palette-slate-400);
+
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.25);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.3), 0 1px 2px -1px rgb(0 0 0 / 0.25);
+  --shadow-md: 0 6px 16px -4px rgb(0 0 0 / 0.35), 0 2px 6px -2px rgb(0 0 0 / 0.25);
+  --shadow-lg: 0 16px 32px -6px rgb(0 0 0 / 0.45), 0 4px 10px -2px rgb(0 0 0 / 0.3);
+  --shadow-focus: 0 0 0 3px rgb(59 130 246 / 0.28);
+  --shadow-focus-destructive: 0 0 0 3px rgb(239 68 68 / 0.28);
+}
+

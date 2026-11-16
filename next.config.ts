@@ -1,16 +1,23 @@
 import type { NextConfig } from "next";
 
+import { buildGlobalSecurityHeaders } from "./src/lib/security/headers";
+
 const nextConfig: NextConfig = {
-  /* config options here */
   cacheComponents: true,
   partialPrefetching: true,
-  turbopack: {
-    rules: {
-      "*.css": {
-        loaders: ["@tailwindcss/turbopack"],
-        as: "*.css",
-      },
+  experimental: {
+    serverActions: {
+      // Sized for 10 MiB max document uploads (issued-letters, activity-docs) + multipart overhead on Node.js container hosting
+      bodySizeLimit: "16mb",
     },
+  },
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: buildGlobalSecurityHeaders(process.env.NODE_ENV === "production"),
+      },
+    ];
   },
 };
 
