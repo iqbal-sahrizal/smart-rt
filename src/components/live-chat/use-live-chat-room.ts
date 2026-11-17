@@ -4,16 +4,20 @@ import * as React from "react"
 
 import {
   deleteOwnChatMessageAction,
+  markChatRoomReadAction,
   moderateChatMessageAction,
   sendChatMessageAction,
 } from "@/app/actions/live-chat"
+import { emitChatReadSync } from "@/components/live-chat/use-chat-unread"
 import {
+  buildReplyPreviewFromRow,
   mapRawChatMessage,
   mergeRealtimeMessage,
   prependOlderMessages,
   type RawChatMessageRow,
 } from "@/lib/live-chat/repository"
 import type {
+  ChatAttachmentInput,
   ChatMessageItem,
   ChatMessagesPage,
   ChatOnlineParticipant,
@@ -78,8 +82,31 @@ export function useLiveChatRoom({
   > | null>(null)
   const lastTypingSentRef = React.useRef<number>(0)
   const hasConnectedOnceRef = React.useRef<boolean>(false)
+  const lastMarkedReadIdRef = React.useRef<string | null>(null)
   const maskModerated = scope !== "admin"
   const roomId = initialPage.room.id
+
+  const hydrateRealtimeSignedUrl = React.useCallback(
+    async (messageId: string, storagePath: string) => {
+      try {
+        const res = await fetch(
+          `/api/live-chat/media?roomId=${encodeURIComponent(roomId)}&path=${encodeURIComponent(storagePath)}`,
+          { cache: "no-store" }
+        )
+        if (!res.ok) return
+        const body = (await res.json()) as { signedUrl?: string }
+        if (!body.signedUrl) return
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId ? { ...m, attachmentUrl: body.signedUrl! } : m
+          )
+        )
+      } catch {
+        // Non-fatal
+      }
+    },
+    [roomId]
+  )
 
   const resyncLatestAfterReconnect = React.useCallback(async () => {
     try {
@@ -146,8 +173,6 @@ export function useLiveChatRoom({
     })
 
     const connectChannel = async () => {
-      // Ensure Realtime WebSocket receives the authenticated user's JWT before
-      // joining `postgres_changes` (otherwise RLS / table grants reject `anon`).
       try {
         const {
           data: { session },
@@ -156,7 +181,7 @@ export function useLiveChatRoom({
           await supabase.realtime.setAuth(session.access_token)
         }
       } catch {
-        // Proceed with best effort; onAuthStateChange will refresh if needed
+        // Proceed with best effort
       }
 
       if (isCancelled) return
@@ -200,22 +225,92 @@ export function useLiveChatRoom({
           (payload) => {
             const row = (payload.new ?? null) as RawChatMessageRow | null
             if (!row || !row.id || row.tenant_id !== tenantId) return
-            const mapped = mapRawChatMessage(row, maskModerated)
+
+            let needSignedUrl = false
             setMessages((prev) => {
-              // In Backoffice moderator view, DB scrubs `chat_messages.content` on hide;
-              // keep previously visible plaintext in memory or resync from moderator vault.
-              if (!maskModerated && mapped.moderationStatus === "hidden_by_moderator") {
-                const existing = prev.find((item) => item.id === mapped.id)
+              const replyTarget = row.reply_to_message_id
+                ? prev.find((item) => item.id === row.reply_to_message_id)
+                : undefined
+
+              const replyPreview = replyTarget
+                ? buildReplyPreviewFromRow(
+                    {
+                      id: replyTarget.id,
+                      sender_name: replyTarget.senderName,
+                      content: replyTarget.content,
+                      attachment_path: replyTarget.attachmentPath,
+                      moderation_status: replyTarget.moderationStatus,
+                    },
+                    maskModerated
+                  )
+                : null
+
+              const mapped = mapRawChatMessage(row, maskModerated, {
+                replyTo: replyPreview,
+              })
+
+              if (mapped.attachmentPath && !mapped.attachmentUrl) {
+                const existingSame = prev.find(
+                  (item) =>
+                    item.id === mapped.id &&
+                    item.attachmentPath === mapped.attachmentPath &&
+                    item.attachmentUrl
+                )
+                if (existingSame) {
+                  mapped.attachmentUrl = existingSame.attachmentUrl
+                } else {
+                  needSignedUrl = true
+                }
+              }
+
+              // Update any existing messages in memory that quote this updated/deleted/hidden message
+              const refreshedPrev =
+                payload.eventType === "UPDATE"
+                  ? prev.map((item) =>
+                      item.replyToMessageId === mapped.id
+                        ? {
+                            ...item,
+                            replyTo: buildReplyPreviewFromRow(
+                              {
+                                id: mapped.id,
+                                sender_name: mapped.senderName,
+                                content: mapped.content,
+                                attachment_path: mapped.attachmentPath,
+                                moderation_status: mapped.moderationStatus,
+                              },
+                              maskModerated
+                            ),
+                          }
+                        : item
+                    )
+                  : prev
+
+              if (
+                !maskModerated &&
+                mapped.moderationStatus === "hidden_by_moderator"
+              ) {
+                const existing = refreshedPrev.find(
+                  (item) => item.id === mapped.id
+                )
                 if (existing && existing.moderationStatus === "published") {
-                  return mergeRealtimeMessage(prev, {
+                  return mergeRealtimeMessage(refreshedPrev, {
                     ...mapped,
                     content: existing.content,
+                    attachmentPath: existing.attachmentPath,
+                    attachmentMime: existing.attachmentMime,
+                    attachmentSize: existing.attachmentSize,
+                    attachmentUrl: existing.attachmentUrl,
                   })
                 }
               }
-              return mergeRealtimeMessage(prev, mapped)
+
+              return mergeRealtimeMessage(refreshedPrev, mapped)
             })
-            if (!maskModerated && mapped.moderationStatus === "hidden_by_moderator") {
+
+            if (needSignedUrl && row.attachment_path) {
+              void hydrateRealtimeSignedUrl(row.id, row.attachment_path)
+            }
+            if (!maskModerated && row.moderation_status === "hidden_by_moderator") {
               void resyncLatestAfterReconnect()
             }
           }
@@ -295,6 +390,7 @@ export function useLiveChatRoom({
     currentMemberId,
     currentRoleBadge,
     currentUserId,
+    hydrateRealtimeSignedUrl,
     maskModerated,
     resyncLatestAfterReconnect,
     roomId,
@@ -321,6 +417,21 @@ export function useLiveChatRoom({
       })
     },
     [currentDisplayName, currentUserId]
+  )
+
+  const markAsRead = React.useCallback(
+    async (lastReadMessageId?: string) => {
+      if (lastReadMessageId && lastMarkedReadIdRef.current === lastReadMessageId) {
+        emitChatReadSync(roomId)
+        return
+      }
+      if (lastReadMessageId) {
+        lastMarkedReadIdRef.current = lastReadMessageId
+      }
+      emitChatReadSync(roomId)
+      await markChatRoomReadAction({ roomId, lastReadMessageId })
+    },
+    [roomId]
   )
 
   const loadOlderMessages = React.useCallback(async () => {
@@ -356,9 +467,15 @@ export function useLiveChatRoom({
   }, [hasMore, isLoadingOlder, oldestCursor, roomId, scope])
 
   const sendMessage = React.useCallback(
-    async (rawContent: string): Promise<boolean> => {
+    async (
+      rawContent: string,
+      options?: {
+        replyToMessageId?: string
+        attachment?: ChatAttachmentInput
+      }
+    ): Promise<boolean> => {
       const trimmed = rawContent.trim()
-      if (!trimmed || isSending) return false
+      if ((!trimmed && !options?.attachment) || isSending) return false
 
       setIsSending(true)
       setErrorMessage(null)
@@ -373,6 +490,8 @@ export function useLiveChatRoom({
         roomId,
         content: trimmed,
         clientMessageId,
+        replyToMessageId: options?.replyToMessageId,
+        attachment: options?.attachment,
       })
 
       setIsSending(false)
@@ -432,10 +551,10 @@ export function useLiveChatRoom({
     onlineParticipants,
     typingUsers,
     emitTyping,
+    markAsRead,
     loadOlderMessages,
     sendMessage,
     deleteOwnMessage,
     moderateMessage,
   }
 }
-

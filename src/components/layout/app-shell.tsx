@@ -9,10 +9,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import { FloatingChatWidget } from "@/components/live-chat/floating-chat-widget"
+import { useChatUnreadCount } from "@/components/live-chat/use-chat-unread"
 import { AppHeader } from "@/components/layout/app-header"
 import { AppSidebar, SidebarNav } from "@/components/layout/app-sidebar"
 import { SmartRtLogo } from "@/components/layout/smart-rt-logo"
 import type { ShellUserInfo } from "@/lib/auth/types"
+import { canModerateLiveChat } from "@/lib/live-chat/types"
 
 interface AppShellProps {
   children: React.ReactNode
@@ -23,6 +26,18 @@ interface AppShellProps {
 export function AppShell({ children, user, navBadges }: AppShellProps) {
   const [collapsed, setCollapsed] = React.useState(false)
   const [mobileOpen, setMobileOpen] = React.useState(false)
+  const canUseAdminChat = Boolean(
+    user?.tenantId && canModerateLiveChat(user.roles ?? [])
+  )
+  const { unreadCount } = useChatUnreadCount(canUseAdminChat)
+
+  const mergedNavBadges = React.useMemo(() => {
+    if (!canUseAdminChat || unreadCount <= 0) return navBadges
+    return {
+      ...navBadges,
+      "/obrolan": unreadCount > 99 ? "99+" : String(unreadCount),
+    }
+  }, [canUseAdminChat, navBadges, unreadCount])
 
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
@@ -34,7 +49,7 @@ export function AppShell({ children, user, navBadges }: AppShellProps) {
         tenantName={user?.tenantName}
         tenantLogoUrl={user?.tenantLogoUrl}
         userRoles={user?.roles}
-        navBadges={navBadges}
+        navBadges={mergedNavBadges}
       />
 
       {/* Mobile Navigation Drawer */}
@@ -54,7 +69,7 @@ export function AppShell({ children, user, navBadges }: AppShellProps) {
           <SidebarNav
             onNavigate={() => setMobileOpen(false)}
             userRoles={user?.roles}
-            navBadges={navBadges}
+            navBadges={mergedNavBadges}
           />
         </SheetContent>
       </Sheet>
@@ -64,6 +79,8 @@ export function AppShell({ children, user, navBadges }: AppShellProps) {
         <AppHeader onOpenMobileMenu={() => setMobileOpen(true)} user={user} />
         <main className="flex-1">{children}</main>
       </div>
+
+      <FloatingChatWidget scope="admin" enabled={canUseAdminChat} />
     </div>
   )
 }

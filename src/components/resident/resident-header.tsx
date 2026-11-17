@@ -12,6 +12,7 @@ import {
   UsersIcon,
 } from "lucide-react"
 
+import { useChatUnreadCount } from "@/components/live-chat/use-chat-unread"
 import { NotificationBellMenu } from "@/components/notifications/notification-bell-menu"
 import { cn } from "cn"
 
@@ -41,6 +42,7 @@ interface ResidentHeaderProps {
 export function ResidentHeader({ user }: ResidentHeaderProps) {
   const pathname = usePathname()
   const [isPending, startTransition] = React.useTransition()
+  const { unreadCount } = useChatUnreadCount(Boolean(user?.tenantId))
 
   const displayName = user?.fullName ?? "Warga"
   const displayEmail = user?.email ?? ""
@@ -102,13 +104,18 @@ export function ResidentHeader({ user }: ResidentHeaderProps) {
             aria-label="Live Chat Warga"
             title="Live Chat Warga"
             className={cn(
-              "inline-flex size-[var(--size-control-xl)] items-center justify-center rounded-full transition-colors duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/25 md:size-[var(--size-control-md)]",
+              "relative inline-flex size-[var(--size-control-xl)] items-center justify-center rounded-full transition-colors duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/25 md:size-[var(--size-control-md)]",
               isResidentRouteActive(pathname, "/resident/chat")
                 ? "bg-primary-subtle text-primary"
                 : "text-foreground-secondary hover:bg-muted/70 hover:text-foreground"
             )}
           >
             <MessageCircleIcon className="size-[var(--size-icon-lg)] md:size-[var(--size-icon-md)]" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
           </Link>
 
           <NotificationBellMenu

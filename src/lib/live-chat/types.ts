@@ -26,6 +26,20 @@ export interface ChatRoomInfo {
   isActive: boolean
 }
 
+export interface ChatReplyPreview {
+  id: string
+  senderName: string
+  content: string
+  hasAttachment: boolean
+  moderationStatus: ChatMessageModerationStatus
+}
+
+export interface ChatAttachmentInput {
+  path: string
+  mimeType: "image/jpeg" | "image/png" | "image/webp"
+  size: number
+}
+
 export interface ChatMessageItem {
   id: string
   tenantId: string
@@ -36,6 +50,12 @@ export interface ChatMessageItem {
   senderRoleBadge: string | null
   content: string
   clientMessageId: string | null
+  replyToMessageId: string | null
+  replyTo: ChatReplyPreview | null
+  attachmentPath: string | null
+  attachmentMime: string | null
+  attachmentSize: number | null
+  attachmentUrl: string | null
   moderationStatus: ChatMessageModerationStatus
   moderationReason: string | null
   createdAt: string
@@ -57,4 +77,3 @@ export interface ChatOnlineParticipant {
   roleBadge: string
   onlineAt: string
 }
-

@@ -18,8 +18,11 @@ const OUT_DIR = `/tmp/smart-rt-live-chat-test-dist-${process.pid}`
 
 const SOURCE_FILES = [
   "src/lib/residents/schemas.ts",
+  "src/lib/community-feed/constants.ts",
+  "src/lib/community-feed/storage.ts",
   "src/lib/live-chat/types.ts",
   "src/lib/live-chat/schemas.ts",
+  "src/lib/live-chat/storage.ts",
   "src/lib/live-chat/repository.ts",
 ]
 
@@ -67,11 +70,12 @@ function loadLiveChatModules() {
   return {
     types: require(join(OUT_DIR, "lib/live-chat/types.js")),
     schemas: require(join(OUT_DIR, "lib/live-chat/schemas.js")),
+    storage: require(join(OUT_DIR, "lib/live-chat/storage.js")),
     repository: require(join(OUT_DIR, "lib/live-chat/repository.js")),
   }
 }
 
-const { types, schemas, repository } = loadLiveChatModules()
+const { types, schemas, storage, repository } = loadLiveChatModules()
 
 const UUID_1 = "11111111-1111-4111-8111-111111111111"
 const UUID_2 = "22222222-2222-4222-8222-222222222222"
@@ -401,5 +405,78 @@ test("moderateChatMessageWithClient restores original text from vault for admin 
   assert.equal(moderated.moderationStatus, "hidden_by_moderator")
   assert.equal(moderated.content, "Konten rahasia sebelum di-hide")
 })
+
+test("buildReplyPreviewFromRow masks deleted and hidden quoted messages", () => {
+  const hiddenPreview = repository.buildReplyPreviewFromRow(
+    {
+      id: UUID_1,
+      sender_name: "Warga A",
+      content: "Konten tersembunyi",
+      attachment_path: `${UUID_2}/${UUID_3}/${UUID_4}/${UUID_1}.jpg`,
+      moderation_status: "hidden_by_moderator",
+    },
+    true
+  )
+  assert.equal(hiddenPreview.content, "Pesan ini disembunyikan oleh pengurus RT.")
+  assert.equal(hiddenPreview.hasAttachment, false)
+
+  const deletedPreview = repository.buildReplyPreviewFromRow(
+    {
+      id: UUID_1,
+      sender_name: "Warga A",
+      content: "Konten dihapus",
+      attachment_path: null,
+      moderation_status: "deleted_by_sender",
+    },
+    false
+  )
+  assert.equal(deletedPreview.content, "Pesan ini telah dihapus oleh pengirim.")
+  assert.equal(deletedPreview.hasAttachment, false)
+})
+
+test("sendChatMessageSchema allows photo-only message and replyToMessageId", () => {
+  const validPhotoOnly = schemas.sendChatMessageSchema.safeParse({
+    roomId: UUID_1,
+    content: "",
+    replyToMessageId: UUID_2,
+    attachment: {
+      path: `${UUID_1}/${UUID_2}/${UUID_3}/${UUID_4}.jpg`,
+      mimeType: "image/jpeg",
+      size: 204800,
+    },
+  })
+  assert.equal(validPhotoOnly.success, true)
+
+  const oversized = schemas.sendChatMessageSchema.safeParse({
+    roomId: UUID_1,
+    content: "",
+    attachment: {
+      path: `${UUID_1}/${UUID_2}/${UUID_3}/${UUID_4}.jpg`,
+      mimeType: "image/jpeg",
+      size: 5 * 1024 * 1024 + 1,
+    },
+  })
+  assert.equal(oversized.success, false)
+})
+
+test("chat media storage path scoping and MIME/magic-byte validation", async () => {
+  const path = storage.buildChatMediaPath(UUID_1, UUID_2, UUID_3, "jpg")
+  assert.equal(storage.isValidChatMediaPath(path), true)
+  assert.equal(storage.chatMediaPathBelongsToScope(path, UUID_1, UUID_2, UUID_3), true)
+  assert.equal(storage.chatMediaPathBelongsToScope(path, UUID_4, UUID_2, UUID_3), false)
+
+  const fakeJpg = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00])], "foto.jpg", {
+    type: "image/jpeg",
+  })
+  const ok = await storage.validateChatImageFile(fakeJpg)
+  assert.equal(ok.ok, true)
+
+  const spoofed = new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], "evil.jpg", {
+    type: "image/jpeg",
+  })
+  const rejected = await storage.validateChatImageFile(spoofed)
+  assert.equal(rejected.ok, false)
+})
+
 
 
