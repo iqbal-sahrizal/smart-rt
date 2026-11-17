@@ -16,6 +16,7 @@ import {
   type AnnouncementTargetType,
 } from "@/lib/announcements/types"
 import { createClient } from "@/lib/supabase/server"
+import { invokeNotificationEnqueueRpc } from "@/lib/notifications/enqueue-rpc"
 
 function getStringField(formData: FormData, key: string): string {
   const value = formData.get(key)
@@ -227,6 +228,12 @@ export async function createAnnouncementAction(
     }
   }
 
+  if (input.status === "published") {
+    await invokeNotificationEnqueueRpc(supabase, "notify_announcement_published", {
+      p_announcement_id: announcementId,
+    })
+  }
+
   revalidatePath("/announcements")
   revalidatePath("/resident/announcements")
   revalidatePath("/")
@@ -401,6 +408,12 @@ export async function updateAnnouncementAction(
           "Gagal memperbarui daftar penerima pengumuman. Perubahan sebelumnya dipulihkan.",
       }
     }
+  }
+
+  if (input.status === "published") {
+    await invokeNotificationEnqueueRpc(supabase, "notify_announcement_published", {
+      p_announcement_id: existing.id,
+    })
   }
 
   revalidatePath("/announcements")

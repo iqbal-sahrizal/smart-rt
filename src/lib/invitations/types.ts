@@ -100,6 +100,7 @@ export interface InvitationActionState {
   error: string | null
   fieldErrors?: Record<string, string[] | undefined>
   activationPath?: string | null
+  activationUrl?: string | null
   invitedEmail?: string | null
   expiresAt?: string | null
   message?: string | null

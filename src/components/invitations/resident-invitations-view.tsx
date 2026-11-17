@@ -195,6 +195,7 @@ export function ResidentInvitationsView({
       {activeBanner?.activationPath && (
         <ActivationLinkBanner
           activationPath={activeBanner.activationPath}
+          activationUrl={activeBanner.activationUrl}
           invitedEmail={activeBanner.invitedEmail}
           expiresAt={activeBanner.expiresAt}
         />

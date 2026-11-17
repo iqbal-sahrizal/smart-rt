@@ -1,4 +1,7 @@
-import { resolveNotificationDestination } from "@/lib/notifications/types"
+import {
+  type NotificationScope,
+  resolveNotificationDestination,
+} from "@/lib/notifications/types"
 
 /**
  * Phase 5.2 — Push Notification Navigation Payload Contract
@@ -24,9 +27,10 @@ export interface PushNavigationPayload {
 
 export function buildPushNavigationPayload(
   referenceType: string | null,
-  referenceId: string | null
+  referenceId: string | null,
+  scope: NotificationScope = "resident"
 ): PushNavigationPayload | null {
-  const path = resolveNotificationDestination("resident", referenceType, referenceId)
+  const path = resolveNotificationDestination(scope, referenceType, referenceId)
   if (!path) return null
   return { path }
 }

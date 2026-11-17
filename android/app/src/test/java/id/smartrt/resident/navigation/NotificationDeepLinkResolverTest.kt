@@ -113,4 +113,55 @@ class NotificationDeepLinkResolverTest {
         val decision = resolver.resolve(url, navToken = "same", isNewIntent = false)
         assertTrue(decision is DeepLinkDecision.Load)
     }
+
+    @Test
+    fun resolveAppLink_acceptsValidInvitationUrl_andStripsExtraQueryParams() {
+        val validToken = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        val incoming = "https://$host/activate-account?token=$validToken&utm_source=whatsapp"
+        val decision = resolver.resolveAppLink(incoming, "https://$host", isNewIntent = false)
+        assertTrue(decision is DeepLinkDecision.Load)
+        assertEquals(
+            "https://$host/activate-account?token=$validToken",
+            (decision as DeepLinkDecision.Load).url
+        )
+
+        val schemeInjected = "https://$host/activate-account?token=$validToken&next=https://evil.com"
+        assertEquals(
+            DeepLinkDecision.Ignore,
+            resolver.resolveAppLink(schemeInjected, "https://$host", isNewIntent = false)
+        )
+    }
+
+    @Test
+    fun resolveAppLink_rejectsUntrustedDomainAndHttpAndDisallowedRoutes() {
+        val validToken = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        assertEquals(
+            DeepLinkDecision.Ignore,
+            resolver.resolveAppLink("https://evil.com/activate-account?token=$validToken", "https://$host", false)
+        )
+        assertEquals(
+            DeepLinkDecision.Ignore,
+            resolver.resolveAppLink("http://$host/activate-account?token=$validToken", "https://$host", false)
+        )
+        assertEquals(
+            DeepLinkDecision.Ignore,
+            resolver.resolveAppLink("https://$host/bills?token=$validToken", "https://$host", false)
+        )
+        assertEquals(
+            DeepLinkDecision.Ignore,
+            resolver.resolveAppLink("https://$host/activate-account?token=short", "https://$host", false)
+        )
+        assertEquals(
+            DeepLinkDecision.Ignore,
+            resolver.resolveAppLink("https://$host/%2e%2e/activate-account?token=$validToken", "https://$host", false)
+        )
+    }
+
+    @Test
+    fun resolveAppLink_deduplicatesOnNewIntent_andAllowsOnColdLaunch() {
+        val validToken = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        val incoming = "https://$host/activate-account?token=$validToken"
+        assertTrue(resolver.resolveAppLink(incoming, "https://$host", isNewIntent = false) is DeepLinkDecision.Load)
+        assertEquals(DeepLinkDecision.Ignore, resolver.resolveAppLink(incoming, "https://$host", isNewIntent = true))
+    }
 }

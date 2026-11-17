@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 
 interface ActivationLinkBannerProps {
   activationPath: string
+  activationUrl?: string | null
   invitedEmail?: string | null
   expiresAt?: string | null
   title?: string
@@ -34,6 +35,7 @@ function formatDateTimeId(iso: string | null | undefined): string | null {
 
 export function ActivationLinkBanner({
   activationPath,
+  activationUrl,
   invitedEmail,
   expiresAt,
   title = "Tautan Aktivasi Satu Kali Siap Dikirim",
@@ -43,7 +45,10 @@ export function ActivationLinkBanner({
 
   const handleCopy = async () => {
     try {
-      const fullUrl = `${window.location.origin}${activationPath}`
+      const fullUrl =
+        activationUrl && activationUrl.startsWith("https://")
+          ? activationUrl
+          : `${window.location.origin}${activationPath}`
       await navigator.clipboard.writeText(fullUrl)
       setCopied(true)
       window.setTimeout(() => setCopied(false), 2500)

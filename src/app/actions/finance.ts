@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
 import { requireAdminContext, requireResidentContext } from "@/lib/auth/guards"
+import { invokeNotificationEnqueueRpc } from "@/lib/notifications/enqueue-rpc"
 import {
   cancelBillSchema,
   createBillSchema,
@@ -400,8 +401,13 @@ export async function createBillAction(
     }
   }
 
+  const createdBillId = (created as { id: string }).id
+  await invokeNotificationEnqueueRpc(supabase, "notify_bill_issued", {
+    p_bill_id: createdBillId,
+  })
+
   revalidateFinancePaths()
-  redirect(`/bills/${(created as { id: string }).id}?created=1`)
+  redirect(`/bills/${createdBillId}?created=1`)
 }
 
 export async function generateBillsAction(
@@ -581,6 +587,31 @@ export async function generateBillsAction(
           failedCount += 1
         }
       }
+    }
+  }
+
+  if (createdCount > 0) {
+    const { data: newBills, error: fetchBillsError } = await supabase
+      .from("bills")
+      .select("id")
+      .eq("tenant_id", tenant.tenantId)
+      .eq("due_id", due.id)
+      .eq("period_year", input.periodYear)
+      .eq("period_month", input.periodMonth)
+      .neq("status", "cancelled")
+
+    if (fetchBillsError) {
+      console.error(
+        `[NotificationEngine] Failed to fetch newly generated bills for notification (${fetchBillsError.code ?? "UNKNOWN"}): ${fetchBillsError.message}`
+      )
+    } else if (newBills && newBills.length > 0) {
+      await Promise.all(
+        newBills.map((b) =>
+          invokeNotificationEnqueueRpc(supabase, "notify_bill_issued", {
+            p_bill_id: (b as { id: string }).id,
+          })
+        )
+      )
     }
   }
 

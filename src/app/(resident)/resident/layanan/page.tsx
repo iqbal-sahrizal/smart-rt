@@ -5,6 +5,7 @@ import {
   ChevronRightIcon,
   FileTextIcon,
   MegaphoneIcon,
+  MessageCircleIcon,
   MessageSquareWarningIcon,
   ShieldCheckIcon,
   UsersIcon,
@@ -23,6 +24,14 @@ import {
 import { requireResidentContext } from "@/lib/auth/guards"
 
 const RESIDENT_SERVICES = [
+  {
+    title: "Live Chat Warga",
+    description:
+      "Ruang obrolan grup realtime untuk berkomunikasi langsung bersama seluruh warga satu RT.",
+    href: "/resident/chat",
+    icon: MessageCircleIcon,
+    featured: true,
+  },
   {
     title: "Permohonan Surat Pengantar",
     description:

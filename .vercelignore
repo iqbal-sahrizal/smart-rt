@@ -1,0 +1,6 @@
+/android/
+/tests/
+/docs/
+/supabase/
+/.env*
+/.vercel/

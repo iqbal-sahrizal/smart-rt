@@ -42,6 +42,118 @@ export interface FcmDispatchResult {
   errors?: string[];
 }
 
+export interface OutboxWorkerRow {
+  id: string;
+  tenant_id: string;
+  recipient_user_id: string;
+  event_type: string;
+  reference_type: string | null;
+  reference_id: string | null;
+  target_scope?: 'resident' | 'admin';
+  title: string;
+  body: string;
+  claim_token?: string | null;
+}
+
+export interface OutboxProcessResult {
+  ok: boolean;
+  mode: 'process_outbox';
+  claimed_count: number;
+  sent_count: number;
+  failed_count: number;
+  groups_processed: number;
+  deactivated_tokens: number;
+  errors?: string[];
+}
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function resolveOutboxDestinationPath(
+  targetScope: 'resident' | 'admin',
+  referenceType: string | null,
+  referenceId: string | null
+): string | null {
+  if (!referenceType) return null;
+  const normalizedType = referenceType.trim().toLowerCase();
+  const safeId = referenceId && UUID_REGEX.test(referenceId) ? referenceId : null;
+
+  if (targetScope === 'admin') {
+    switch (normalizedType) {
+      case 'announcements':
+      case 'announcement':
+        return safeId ? `/announcements/${safeId}` : '/announcements';
+      case 'bills':
+      case 'bill':
+        return safeId ? `/bills/${safeId}` : '/bills';
+      case 'payments':
+      case 'payment':
+        return safeId ? `/payments/${safeId}` : '/payments';
+      case 'complaints':
+      case 'complaint':
+        return safeId ? `/pengaduan/${safeId}` : '/pengaduan';
+      case 'letter_requests':
+      case 'letter_request':
+      case 'letters':
+      case 'letter':
+        return '/surat';
+      case 'activities':
+      case 'activity':
+        return safeId ? `/kegiatan/${safeId}` : '/kegiatan';
+      case 'ronda_schedules':
+      case 'ronda_schedule':
+      case 'ronda':
+        return '/ronda';
+      case 'community_post':
+      case 'community_posts':
+      case 'community':
+        return '/komunitas';
+      default:
+        return null;
+    }
+  }
+
+  switch (normalizedType) {
+    case 'announcements':
+    case 'announcement':
+      return safeId ? `/resident/announcements/${safeId}` : '/resident/announcements';
+    case 'bills':
+    case 'bill':
+      return safeId ? `/resident/bills/${safeId}` : '/resident/bills';
+    case 'payments':
+    case 'payment':
+      return '/resident/bills';
+    case 'households':
+    case 'household':
+      return '/resident/household';
+    case 'residents':
+    case 'resident':
+    case 'resident_invitations':
+    case 'resident_invitation':
+      return '/resident/profile';
+    case 'complaints':
+    case 'complaint':
+      return safeId ? `/resident/complaints/${safeId}` : '/resident/complaints';
+    case 'letter_requests':
+    case 'letter_request':
+    case 'letters':
+    case 'letter':
+      return safeId ? `/resident/letters/${safeId}` : '/resident/letters';
+    case 'activities':
+    case 'activity':
+      return safeId ? `/resident/activities/${safeId}` : '/resident/activities';
+    case 'ronda_schedules':
+    case 'ronda_schedule':
+    case 'ronda':
+      return safeId ? `/resident/ronda/${safeId}` : '/resident/ronda';
+    case 'community_post':
+    case 'community_posts':
+    case 'community':
+      return '/resident/feed';
+    default:
+      return null;
+  }
+}
+
 /**
  * Parses and normalizes PKCS#8 PEM private key into binary ArrayBuffer.
  */
@@ -254,6 +366,300 @@ export function loadServiceAccountCredentials(
   return null;
 }
 
+interface OutboxBatchGroup {
+  tenantId: string;
+  targetScope: 'resident' | 'admin';
+  referenceType: string | null;
+  referenceId: string | null;
+  title: string;
+  body: string;
+  recipientUserIds: string[];
+  rows: OutboxWorkerRow[];
+}
+
+async function fetchActiveTokensForRecipients(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  tenantId: string,
+  recipientUserIds: string[],
+  fetchImpl: typeof fetch
+): Promise<{ ok: true; tokens: DeviceTokenRow[] } | { ok: false; error: string }> {
+  const userIdsParam = recipientUserIds.join(',');
+  const queryUrl = `${supabaseUrl}/rest/v1/user_device_tokens?tenant_id=eq.${tenantId}&user_id=in.(${userIdsParam})&is_active=eq.true&select=id,user_id,fcm_token`;
+
+  const tokensRes = await fetchImpl(queryUrl, {
+    headers: {
+      'apikey': serviceRoleKey,
+      'Authorization': `Bearer ${serviceRoleKey}`,
+    },
+  });
+
+  if (!tokensRes.ok) {
+    const errText = await tokensRes.text();
+    return { ok: false, error: `Failed to query device tokens from database: ${errText}` };
+  }
+
+  const tokens = (await tokensRes.json()) as DeviceTokenRow[];
+  return { ok: true, tokens };
+}
+
+async function deactivateStaleTokens(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  staleTokenIds: string[],
+  fetchImpl: typeof fetch
+): Promise<number> {
+  if (staleTokenIds.length === 0) return 0;
+  const updateUrl = `${supabaseUrl}/rest/v1/user_device_tokens?id=in.(${staleTokenIds.join(',')})`;
+  try {
+    const updateRes = await fetchImpl(updateUrl, {
+      method: 'PATCH',
+      headers: {
+        'apikey': serviceRoleKey,
+        'Authorization': `Bearer ${serviceRoleKey}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal',
+      },
+      body: JSON.stringify({ is_active: false }),
+    });
+    return updateRes.ok ? staleTokenIds.length : 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function recordOutboxResult(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  outboxId: string,
+  success: boolean,
+  errorText: string | null,
+  claimToken: string | null | undefined,
+  fetchImpl: typeof fetch
+): Promise<void> {
+  await fetchImpl(`${supabaseUrl}/rest/v1/rpc/record_notification_outbox_result`, {
+    method: 'POST',
+    headers: {
+      'apikey': serviceRoleKey,
+      'Authorization': `Bearer ${serviceRoleKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      p_outbox_id: outboxId,
+      p_success: success,
+      p_error: errorText,
+      p_claim_token: claimToken ?? null,
+    }),
+  });
+}
+
+async function handleProcessOutboxRequest(
+  rawPayload: Record<string, unknown>,
+  deps: {
+    envGet: (k: string) => string | undefined;
+    fetchImpl: typeof fetch;
+  }
+): Promise<Response> {
+  const supabaseUrl = deps.envGet('SUPABASE_URL');
+  const serviceRoleKey = deps.envGet('SUPABASE_SERVICE_ROLE_KEY');
+  if (!supabaseUrl || !serviceRoleKey) {
+    return new Response(
+      JSON.stringify({ error: 'Supabase URL or service role key missing in environment' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
+  const credentials = loadServiceAccountCredentials(deps.envGet);
+  if (!credentials) {
+    return new Response(
+      JSON.stringify({ error: 'Firebase service account credentials not configured in environment' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
+  const rawLimit = Number(rawPayload.limit ?? 50);
+  const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(Math.trunc(rawLimit), 200)) : 50;
+  const rawLease = Number(rawPayload.lease_seconds ?? 120);
+  const leaseSeconds = Number.isFinite(rawLease) ? Math.max(10, Math.min(Math.trunc(rawLease), 3600)) : 120;
+
+  const claimRes = await deps.fetchImpl(`${supabaseUrl}/rest/v1/rpc/claim_pending_notification_outbox_batch`, {
+    method: 'POST',
+    headers: {
+      'apikey': serviceRoleKey,
+      'Authorization': `Bearer ${serviceRoleKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_limit: limit, p_lease_seconds: leaseSeconds }),
+  });
+
+  if (!claimRes.ok) {
+    const errText = await claimRes.text();
+    return new Response(
+      JSON.stringify({ error: `Failed to claim outbox batch: ${errText}` }),
+      { status: 502, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
+  const claimedRows = (await claimRes.json()) as OutboxWorkerRow[];
+  if (!Array.isArray(claimedRows) || claimedRows.length === 0) {
+    const emptyResult: OutboxProcessResult = {
+      ok: true,
+      mode: 'process_outbox',
+      claimed_count: 0,
+      sent_count: 0,
+      failed_count: 0,
+      groups_processed: 0,
+      deactivated_tokens: 0,
+    };
+    return new Response(JSON.stringify(emptyResult), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const groupsMap = new Map<string, OutboxBatchGroup>();
+  for (const row of claimedRows) {
+    const targetScope: 'resident' | 'admin' = row.target_scope === 'admin' ? 'admin' : 'resident';
+    const key = [row.tenant_id, targetScope, row.reference_type ?? '', row.reference_id ?? '', row.title, row.body].join('::');
+    const existing = groupsMap.get(key);
+    if (existing) {
+      if (!existing.recipientUserIds.includes(row.recipient_user_id)) {
+        existing.recipientUserIds.push(row.recipient_user_id);
+      }
+      existing.rows.push(row);
+    } else {
+      groupsMap.set(key, {
+        tenantId: row.tenant_id,
+        targetScope,
+        referenceType: row.reference_type,
+        referenceId: row.reference_id,
+        title: row.title,
+        body: row.body,
+        recipientUserIds: [row.recipient_user_id],
+        rows: [row],
+      });
+    }
+  }
+
+  const groups = Array.from(groupsMap.values());
+  let cachedAccessToken: string | null = null;
+  let oauthError: string | null = null;
+  let sentCount = 0;
+  let failedCount = 0;
+  let totalDeactivated = 0;
+  const errors: string[] = [];
+
+  for (const group of groups) {
+    const tokensResult = await fetchActiveTokensForRecipients(
+      supabaseUrl,
+      serviceRoleKey,
+      group.tenantId,
+      group.recipientUserIds,
+      deps.fetchImpl
+    );
+
+    if (!tokensResult.ok) {
+      errors.push(tokensResult.error);
+      for (const row of group.rows) {
+        await recordOutboxResult(supabaseUrl, serviceRoleKey, row.id, false, tokensResult.error, row.claim_token, deps.fetchImpl);
+        failedCount++;
+      }
+      continue;
+    }
+
+    if (tokensResult.tokens.length === 0) {
+      for (const row of group.rows) {
+        await recordOutboxResult(supabaseUrl, serviceRoleKey, row.id, true, null, row.claim_token, deps.fetchImpl);
+        sentCount++;
+      }
+      continue;
+    }
+
+    if (!cachedAccessToken && !oauthError) {
+      try {
+        cachedAccessToken = await getGoogleOAuth2AccessToken(
+          credentials.clientEmail,
+          credentials.privateKey,
+          deps.fetchImpl
+        );
+      } catch (err) {
+        oauthError = `Failed to authenticate with Google OAuth2: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+
+    if (oauthError || !cachedAccessToken) {
+      const errMsg = oauthError ?? 'Missing Google OAuth2 access token';
+      errors.push(errMsg);
+      for (const row of group.rows) {
+        await recordOutboxResult(supabaseUrl, serviceRoleKey, row.id, false, errMsg, row.claim_token, deps.fetchImpl);
+        failedCount++;
+      }
+      continue;
+    }
+
+    const navPath = resolveOutboxDestinationPath(group.targetScope, group.referenceType, group.referenceId);
+    const navData = navPath ? { path: navPath } : undefined;
+
+    const staleTokenIds: string[] = [];
+    const userOutcome = new Map<string, { succeeded: number; transientFailed: number; lastError: string | null }>();
+
+    for (const tokenRow of tokensResult.tokens) {
+      const outcome = userOutcome.get(tokenRow.user_id) ?? { succeeded: 0, transientFailed: 0, lastError: null };
+      const sendResult = await sendFcmHttpV1Message(
+        credentials.projectId,
+        cachedAccessToken,
+        tokenRow.fcm_token,
+        group.title,
+        group.body,
+        navData,
+        deps.fetchImpl
+      );
+
+      if (sendResult.success) {
+        outcome.succeeded++;
+      } else if (sendResult.shouldDeactivateToken) {
+        staleTokenIds.push(tokenRow.id);
+      } else {
+        outcome.transientFailed++;
+        outcome.lastError = sendResult.error ?? 'FCM dispatch failed';
+      }
+      userOutcome.set(tokenRow.user_id, outcome);
+    }
+
+    totalDeactivated += await deactivateStaleTokens(supabaseUrl, serviceRoleKey, staleTokenIds, deps.fetchImpl);
+
+    for (const row of group.rows) {
+      const outcome = userOutcome.get(row.recipient_user_id);
+      const rowFailed = Boolean(outcome && outcome.succeeded === 0 && outcome.transientFailed > 0);
+      const rowError = rowFailed ? (outcome?.lastError ?? 'FCM dispatch failed') : null;
+      if (rowError) errors.push(`Outbox ${row.id}: ${rowError}`);
+
+      await recordOutboxResult(supabaseUrl, serviceRoleKey, row.id, !rowFailed, rowError, row.claim_token, deps.fetchImpl);
+      if (rowFailed) {
+        failedCount++;
+      } else {
+        sentCount++;
+      }
+    }
+  }
+
+  const outboxResult: OutboxProcessResult = {
+    ok: failedCount === 0 || sentCount > 0,
+    mode: 'process_outbox',
+    claimed_count: claimedRows.length,
+    sent_count: sentCount,
+    failed_count: failedCount,
+    groups_processed: groups.length,
+    deactivated_tokens: totalDeactivated,
+    errors: errors.length > 0 ? errors : undefined,
+  };
+
+  return new Response(JSON.stringify(outboxResult), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
 /**
  * Handles incoming HTTP request to the Edge Function.
  */
@@ -271,12 +677,14 @@ export async function handleFcmRequest(
     });
   }
 
-  // 1. Authenticate caller (internal bearer secret or service role)
+  // 1. Authenticate caller (internal bearer secret, service role, or pg_cron single-use nonce for process_outbox)
   const authHeader = req.headers.get('Authorization') ?? '';
   const expectedSecret = deps.envGet('FCM_FUNCTION_SECRET') || deps.envGet('SUPABASE_SERVICE_ROLE_KEY');
   const bearerToken = authHeader.replace(/^Bearer\s+/i, '').trim();
+  const hasBearerAuth = Boolean(expectedSecret && bearerToken === expectedSecret);
+  const dispatchNonce = (req.headers.get('X-Outbox-Dispatch-Nonce') ?? '').trim();
 
-  if (!expectedSecret || bearerToken !== expectedSecret) {
+  if (!hasBearerAuth && !dispatchNonce) {
     return new Response(JSON.stringify({ error: 'Unauthorized: Invalid function secret' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' },
@@ -284,9 +692,9 @@ export async function handleFcmRequest(
   }
 
   // 2. Parse and validate JSON request body
-  let payload: FcmDispatchPayload;
+  let rawBody: Record<string, unknown>;
   try {
-    payload = await req.json();
+    rawBody = await req.json();
   } catch {
     return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
       status: 400,
@@ -294,6 +702,52 @@ export async function handleFcmRequest(
     });
   }
 
+  const fetchImpl = deps.fetchImpl ?? fetch;
+
+  if (!hasBearerAuth) {
+    if (!rawBody || typeof rawBody !== 'object' || rawBody.mode !== 'process_outbox') {
+      return new Response(JSON.stringify({ error: 'Unauthorized: Invalid function secret' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    const supabaseUrl = deps.envGet('SUPABASE_URL');
+    const serviceRoleKey = deps.envGet('SUPABASE_SERVICE_ROLE_KEY');
+    if (!supabaseUrl || !serviceRoleKey) {
+      return new Response(
+        JSON.stringify({ error: 'Supabase URL or service role key missing in environment' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const nonceRes = await fetchImpl(`${supabaseUrl}/rest/v1/rpc/consume_notification_dispatch_nonce`, {
+      method: 'POST',
+      headers: {
+        'apikey': serviceRoleKey,
+        'Authorization': `Bearer ${serviceRoleKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ p_nonce: dispatchNonce }),
+    });
+
+    const consumed = nonceRes.ok ? await nonceRes.json() : false;
+    if (consumed !== true) {
+      return new Response(JSON.stringify({ error: 'Unauthorized: Invalid or expired dispatch nonce' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+  }
+
+  if (rawBody && typeof rawBody === 'object' && rawBody.mode === 'process_outbox') {
+    return handleProcessOutboxRequest(rawBody, {
+      envGet: deps.envGet,
+      fetchImpl,
+    });
+  }
+
+  const payload = rawBody as unknown as FcmDispatchPayload;
   const { tenant_id, recipient_user_ids, title, body, data } = payload;
 
   if (!tenant_id || !Array.isArray(recipient_user_ids) || recipient_user_ids.length === 0 || !title || !body) {
@@ -326,8 +780,6 @@ export async function handleFcmRequest(
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
-
-  const fetchImpl = deps.fetchImpl ?? fetch;
 
   // Build query: GET /rest/v1/user_device_tokens?tenant_id=eq.{tenant_id}&user_id=in.({user_ids})&is_active=eq.true
   const userIdsParam = recipient_user_ids.join(',');

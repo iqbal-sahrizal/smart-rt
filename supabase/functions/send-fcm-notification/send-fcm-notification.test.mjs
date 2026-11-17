@@ -1,13 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { Buffer } from 'node:buffer';
 import { generateKeyPairSync } from 'node:crypto';
 import {
-  pemToBinary,
   base64UrlEncode,
   createGoogleJwtAssertion,
   getGoogleOAuth2AccessToken,
   sendFcmHttpV1Message,
-  loadServiceAccountCredentials,
   handleFcmRequest,
 } from './index.ts';
 
@@ -227,5 +226,120 @@ test('handleFcmRequest validates tenant, queries device tokens, and dispatches F
   assert.equal(result.failure_count, 1);
   assert.equal(result.deactivated_tokens, 1);
   assert.equal(deactivationPatchCalled, true);
+});
+
+test('handleFcmRequest processes outbox batch via single-use nonce and resolves admin/resident paths', async () => {
+  const mockEnv = {
+    FCM_FUNCTION_SECRET: 'test_secret',
+    FIREBASE_PROJECT_ID: 'smart-rt-15e23',
+    FIREBASE_CLIENT_EMAIL: 'fcm@smart-rt-15e23.iam.gserviceaccount.com',
+    FIREBASE_PRIVATE_KEY: privateKey,
+    SUPABASE_URL: 'https://mock.supabase.co',
+    SUPABASE_SERVICE_ROLE_KEY: 'mock-service-role',
+  };
+
+  const recordedResults = [];
+  const fcmDispatchedPaths = [];
+  const sampleComplaintId = '11111111-1111-4111-8111-111111111111';
+
+  const mockFetch = async (url, options) => {
+    if (url.includes('/rpc/consume_notification_dispatch_nonce')) {
+      const body = JSON.parse(options.body);
+      return new Response(JSON.stringify(body.p_nonce === 'valid-cron-nonce-1234567890abcdef'), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (url.includes('/rpc/claim_pending_notification_outbox_batch')) {
+      return new Response(JSON.stringify([
+        {
+          id: 'outbox-adm-1',
+          tenant_id: 'tenant-1',
+          recipient_user_id: 'staff-1',
+          event_type: 'complaint.reply',
+          reference_type: 'complaint',
+          reference_id: sampleComplaintId,
+          target_scope: 'admin',
+          title: 'Balasan warga',
+          body: 'Mohon ditindaklanjuti',
+          claim_token: 'claim-tok-1',
+        },
+        {
+          id: 'outbox-res-1',
+          tenant_id: 'tenant-1',
+          recipient_user_id: 'warga-1',
+          event_type: 'complaint.reply',
+          reference_type: 'complaint',
+          reference_id: sampleComplaintId,
+          target_scope: 'resident',
+          title: 'Balasan pengurus',
+          body: 'Sedang diproses',
+          claim_token: 'claim-tok-2',
+        },
+      ]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    if (url.includes('user_device_tokens')) {
+      if (url.includes('staff-1')) {
+        return new Response(JSON.stringify([{ id: 'tok-adm', user_id: 'staff-1', fcm_token: 'fcm-adm' }]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (url.includes('oauth2.googleapis.com/token')) {
+      return new Response(JSON.stringify({ access_token: 'mock-oauth-tok', expires_in: 3600 }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (url.includes('messages:send')) {
+      const body = JSON.parse(options.body);
+      fcmDispatchedPaths.push(body.message.data?.path);
+      return new Response(JSON.stringify({ name: 'msg/adm-1' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (url.includes('/rpc/record_notification_outbox_result')) {
+      recordedResults.push(JSON.parse(options.body));
+      return new Response(null, { status: 204 });
+    }
+
+    throw new Error(`Unexpected fetch URL: ${url}`);
+  };
+
+  const req = new Request('https://edge.supabase.co/functions/v1/send-fcm-notification', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Outbox-Dispatch-Nonce': 'valid-cron-nonce-1234567890abcdef',
+    },
+    body: JSON.stringify({ mode: 'process_outbox', limit: 20 }),
+  });
+
+  const res = await handleFcmRequest(req, {
+    envGet: (k) => mockEnv[k],
+    fetchImpl: mockFetch,
+  });
+
+  assert.equal(res.status, 200);
+  const result = await res.json();
+  assert.equal(result.ok, true);
+  assert.equal(result.mode, 'process_outbox');
+  assert.equal(result.claimed_count, 2);
+  assert.equal(result.sent_count, 2);
+  assert.deepEqual(fcmDispatchedPaths, [`/pengaduan/${sampleComplaintId}`]);
+  assert.equal(recordedResults.length, 2);
+  assert.equal(recordedResults[0].p_claim_token, 'claim-tok-1');
+  assert.equal(recordedResults[1].p_claim_token, 'claim-tok-2');
 });
 

@@ -30,6 +30,31 @@ class NotificationDeepLinkResolver(
     private val trustedOriginPolicy: TrustedOriginPolicy
 ) {
     private var lastHandledNavToken: String? = null
+    private var lastHandledAppLinkPath: String? = null
+
+    /**
+     * Validates an incoming Android App Link (`ACTION_VIEW`) invitation URI.
+     * Reconstructs the final URL strictly from [webBaseUrl] + the validated canonical path,
+     * never trusting the incoming URI host or arbitrary query parameters.
+     */
+    fun resolveAppLink(
+        rawUrl: String?,
+        webBaseUrl: String,
+        isNewIntent: Boolean
+    ): DeepLinkDecision {
+        val validated = trustedOriginPolicy.validateInvitationAppLink(rawUrl)
+        if (validated !is PathValidationResult.Valid) {
+            return DeepLinkDecision.Ignore
+        }
+
+        if (isNewIntent && validated.path == lastHandledAppLinkPath) {
+            return DeepLinkDecision.Ignore
+        }
+
+        lastHandledAppLinkPath = validated.path
+        val cleanBase = webBaseUrl.trimEnd('/')
+        return DeepLinkDecision.Load("$cleanBase${validated.path}")
+    }
 
     /**
      * @param targetUrl the `target_url` intent extra (full absolute URL, or null/absent).
@@ -66,6 +91,7 @@ class NotificationDeepLinkResolver(
     /** Resets duplicate-detection state. Exposed for tests; not required in normal operation. */
     fun resetToken() {
         lastHandledNavToken = null
+        lastHandledAppLinkPath = null
     }
 
     private fun extractPathAndQuery(rawUrl: String): String {

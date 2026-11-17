@@ -411,8 +411,109 @@ class TrustedOriginPolicy(
         return PathValidationResult.Valid(fullRelativePath, isDownload = false)
     }
 
+    /**
+     * Strict Android App Link validator for Resident account activation URLs.
+     *
+     * Enforces fail-closed validation:
+     * - Must match trusted HTTPS origin ([isTrustedOrigin]).
+     * - Rejects raw/encoded traversal (`..`, `%25`, `%00`, `\`, `//`) and fragments.
+     * - Path must normalize strictly to `/activate-account`.
+     * - Query must contain a single valid `token` matching `[A-Za-z0-9_-]{32,128}`
+     *   with no scheme injection (`://` / `%3A%2F%2F`).
+     * - Returns ONLY the reconstructed canonical `/activate-account?token=<token>`
+     *   path (stripping any extra query parameters to eliminate open redirects).
+     */
+    fun validateInvitationAppLink(rawUrl: String?): PathValidationResult {
+        if (rawUrl.isNullOrBlank()) {
+            return PathValidationResult.Invalid("App link URL is empty or null")
+        }
+
+        if (!isPayloadSizeSafe(rawUrl)) {
+            return PathValidationResult.Invalid("App link URL exceeds size limit")
+        }
+
+        val trimmed = rawUrl.trim()
+        if (!isTrustedOrigin(trimmed)) {
+            return PathValidationResult.Invalid("App link origin is not trusted")
+        }
+
+        if (trimmed.contains('\u0000') || trimmed.contains('\\')) {
+            return PathValidationResult.Invalid("Forbidden control or backslash character in App link")
+        }
+
+        val uri = try {
+            URI(trimmed)
+        } catch (_: Exception) {
+            return PathValidationResult.Invalid("Malformed App link URI")
+        }
+
+        if (uri.rawFragment != null) {
+            return PathValidationResult.Invalid("Fragment is not permitted in invitation App link")
+        }
+
+        val rawPath = uri.rawPath ?: return PathValidationResult.Invalid("Missing App link path")
+        if (RAW_ENCODED_PERCENT.containsMatchIn(rawPath) || RAW_ENCODED_NULL.containsMatchIn(rawPath)) {
+            return PathValidationResult.Invalid("Forbidden percent or null encoding in App link path")
+        }
+
+        var decodedPath = rawPath
+        repeat(MAX_DECODE_ITERATIONS) {
+            val next = try {
+                URLDecoder.decode(decodedPath, "UTF-8")
+            } catch (_: Exception) {
+                return PathValidationResult.Invalid("Malformed percent encoding in App link path")
+            }
+            if (next.contains("..") || next.contains('\\') || next.contains('\u0000') || next.contains("//")) {
+                return PathValidationResult.Invalid("Traversal or forbidden sequence in App link path")
+            }
+            if (next == decodedPath) return@repeat
+            decodedPath = next
+        }
+
+        val normalizedPath = uri.normalize().path ?: return PathValidationResult.Invalid("Failed to normalize App link path")
+        if (normalizedPath != INVITATION_ACTIVATION_PATH) {
+            return PathValidationResult.Invalid("App link route is not an allowed invitation path")
+        }
+
+        val rawQuery = uri.rawQuery ?: return PathValidationResult.Invalid("Missing invitation token query")
+        if (rawQuery.contains("://") || rawQuery.contains("%3A%2F%2F", ignoreCase = true)) {
+            return PathValidationResult.Invalid("Scheme injection in App link query is not permitted")
+        }
+
+        var extractedToken: String? = null
+        for (pair in rawQuery.split('&')) {
+            if (pair.isEmpty()) continue
+            val eqIdx = pair.indexOf('=')
+            if (eqIdx <= 0) continue
+            val key = try {
+                URLDecoder.decode(pair.substring(0, eqIdx), "UTF-8")
+            } catch (_: Exception) {
+                return PathValidationResult.Invalid("Malformed query key in App link")
+            }
+            if (key == "token") {
+                if (extractedToken != null) {
+                    return PathValidationResult.Invalid("Duplicate token parameter in App link")
+                }
+                val valDecoded = try {
+                    URLDecoder.decode(pair.substring(eqIdx + 1), "UTF-8").trim()
+                } catch (_: Exception) {
+                    return PathValidationResult.Invalid("Malformed token encoding in App link")
+                }
+                if (!INVITATION_TOKEN_REGEX.matches(valDecoded)) {
+                    return PathValidationResult.Invalid("Invalid invitation token format in App link")
+                }
+                extractedToken = valDecoded
+            }
+        }
+
+        val safeToken = extractedToken ?: return PathValidationResult.Invalid("Invitation token is missing")
+        return PathValidationResult.Valid("$INVITATION_ACTIVATION_PATH?token=$safeToken", isDownload = false)
+    }
+
     companion object {
         const val MAX_PAYLOAD_SIZE = 4096
+        private const val INVITATION_ACTIVATION_PATH = "/activate-account"
+        private val INVITATION_TOKEN_REGEX = Regex("^[A-Za-z0-9_-]{32,128}$")
 
         /**
          * Root path under which all notification deep-link navigation targets must fall.

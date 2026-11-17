@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache"
 
+import { invokeNotificationEnqueueRpc } from "@/lib/notifications/enqueue-rpc"
+
 import {
   resolveAnyOperationalComplaintContext,
   resolveScopedComplaintContext,
@@ -223,6 +225,9 @@ export async function createComplaintReplyAction(
       roles: tenant.roles,
       scope: operational.scope,
       input: parsed.data,
+    })
+    await invokeNotificationEnqueueRpc(supabase, "notify_complaint_reply", {
+      p_reply_id: reply.id,
     })
     revalidateComplaintPaths(reply.complaintId)
     return { ok: true, data: reply, error: null }

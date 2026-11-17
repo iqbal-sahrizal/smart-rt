@@ -10,6 +10,7 @@ import {
   LandmarkIcon,
   LayoutDashboardIcon,
   MegaphoneIcon,
+  MessageCircleIcon,
   MessageSquareWarningIcon,
   ReceiptIcon,
   SettingsIcon,
@@ -91,6 +92,13 @@ export const NAV_ITEMS: NavItem[] = [
     title: "Feed Komunitas",
     href: "/komunitas",
     icon: ImageIcon,
+    section: "main",
+    requiredRoles: ["ketua_rt", "sekretaris", "pengurus"],
+  },
+  {
+    title: "Live Chat Warga",
+    href: "/obrolan",
+    icon: MessageCircleIcon,
     section: "main",
     requiredRoles: ["ketua_rt", "sekretaris", "pengurus"],
   },
@@ -284,6 +292,12 @@ export const ADMIN_NAV_GROUPS: AdminNavEntry[] = [
         icon: ImageIcon,
         requiredRoles: ["ketua_rt", "sekretaris", "pengurus"],
       },
+      {
+        title: "Live Chat Warga",
+        href: "/obrolan",
+        icon: MessageCircleIcon,
+        requiredRoles: ["ketua_rt", "sekretaris", "pengurus"],
+      },
     ],
   },
   {
@@ -421,6 +435,7 @@ export function getRouteTitle(rawPathname: string): string {
   if (pathname === "/pengaduan") return "Pengaduan Warga"
   if (/^\/pengaduan\/[^/]+$/.test(pathname)) return "Detail Pengaduan"
   if (pathname === "/komunitas") return "Moderasi Feed Komunitas"
+  if (pathname === "/obrolan") return "Live Chat Warga"
   if (pathname === "/surat") return "Surat Pengantar"
   if (pathname === "/surat/jenis") return "Jenis Surat"
   if (/^\/surat\/[^/]+$/.test(pathname)) return "Detail Permohonan Surat"
@@ -576,6 +591,9 @@ export function getAdminBreadcrumbs(rawPathname: string): BreadcrumbSegment[] {
   }
   if (pathname === "/komunitas") {
     return [{ label: "Moderasi Feed Komunitas" }]
+  }
+  if (pathname === "/obrolan") {
+    return [{ label: "Live Chat Warga" }]
   }
   if (pathname === "/surat") {
     return [{ label: "Surat Pengantar" }]

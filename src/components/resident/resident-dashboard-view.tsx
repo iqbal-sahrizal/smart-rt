@@ -11,6 +11,7 @@ import {
   InboxIcon,
   MapPinIcon,
   MegaphoneIcon,
+  MessageCircleIcon,
   MessageSquareWarningIcon,
   ReceiptIcon,
   ShieldCheckIcon,
@@ -63,6 +64,12 @@ import {
 } from "@/lib/residents/types"
 
 const QUICK_ACTIONS = [
+  {
+    label: "Live Chat Warga",
+    description: "Grup chat realtime warga",
+    href: "/resident/chat",
+    icon: MessageCircleIcon,
+  },
   {
     label: "Feed Komunitas",
     description: "Bagikan momen warga",

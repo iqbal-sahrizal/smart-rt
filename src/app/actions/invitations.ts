@@ -9,7 +9,6 @@ import { requireAdminContext } from "@/lib/auth/guards"
 import {
   buildActivationEmailRedirectTo,
   resolveActivationSignInOutcome,
-  resolveActivationSignUpOutcome,
 } from "@/lib/invitations/auth-flow"
 import {
   createInvitationSchema,
@@ -23,6 +22,12 @@ import {
   type InvitationActionState,
   type RedeemInvitationActionState,
 } from "@/lib/invitations/types"
+import {
+  buildCanonicalActivationUrl,
+  isTrustedAppOrigin,
+  resolveCanonicalAppOrigin,
+} from "@/lib/invitations/url"
+import { getSupabaseConfig } from "@/lib/supabase/config"
 import { createClient } from "@/lib/supabase/server"
 
 function getStringField(formData: FormData, key: string): string {
@@ -170,6 +175,7 @@ export async function createResidentInvitationAction(
     ok: true,
     error: null,
     activationPath: `/activate-account?token=${rawToken}`,
+    activationUrl: buildCanonicalActivationUrl(rawToken),
     invitedEmail,
     expiresAt,
     message: "Undangan aktivasi berhasil dibuat.",
@@ -310,6 +316,7 @@ export async function resendResidentInvitationAction(
     ok: true,
     error: null,
     activationPath: `/activate-account?token=${rawToken}`,
+    activationUrl: buildCanonicalActivationUrl(rawToken),
     invitedEmail,
     expiresAt,
     message: "Undangan baru berhasil diterbitkan.",
@@ -317,17 +324,15 @@ export async function resendResidentInvitationAction(
 }
 
 async function resolveSafeRequestOrigin(): Promise<string | null> {
+  const canonicalOrigin = resolveCanonicalAppOrigin()
+  if (canonicalOrigin) {
+    return canonicalOrigin
+  }
+
   const headerStore = await headers()
   const rawOrigin = headerStore.get("origin")?.trim()
-  if (rawOrigin) {
-    try {
-      const parsed = new URL(rawOrigin)
-      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
-        return parsed.origin
-      }
-    } catch {
-      // fall back to host headers
-    }
+  if (rawOrigin && isTrustedAppOrigin(rawOrigin)) {
+    return new URL(rawOrigin).origin
   }
 
   const forwardedHost = headerStore
@@ -345,11 +350,8 @@ async function resolveSafeRequestOrigin(): Promise<string | null> {
     ?.trim()
     .toLowerCase()
   const proto = forwardedProto === "https" ? "https" : "http"
-  try {
-    return new URL(`${proto}://${host}`).origin
-  } catch {
-    return null
-  }
+  const candidate = `${proto}://${host}`
+  return isTrustedAppOrigin(candidate) ? new URL(candidate).origin : null
 }
 
 export async function signOutToSwitchInvitationAccountAction(
@@ -427,62 +429,75 @@ export async function redeemInvitationAction(
     }
 
     const invitedEmail = target.email
-    const residentName =
-      typeof target.resident_name === "string" ? target.resident_name : undefined
-    const requestOrigin = await resolveSafeRequestOrigin()
-    const emailRedirectTo = buildActivationEmailRedirectTo(
-      requestOrigin,
-      verifiedToken
-    )
+    const { url: supabaseUrl, anonKey } = getSupabaseConfig()
 
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email: invitedEmail,
-      password: parsed.data.password,
-      options: {
-        ...(residentName ? { data: { full_name: residentName } } : {}),
-        ...(emailRedirectTo ? { emailRedirectTo } : {}),
-      },
-    })
-
-    const signUpDecision = resolveActivationSignUpOutcome({
-      signUpError: signUpError as
-        | { code?: string; message?: string; status?: number }
-        | null,
-      hasSignUpSession: Boolean(signUpData?.session),
-    })
-
-    if (signUpDecision.action === "fail") {
-      return { error: signUpDecision.error }
+    // Create confirmed auth user via server-side Edge Function (no email verification sent)
+    let activateRes: Response
+    try {
+      activateRes = await fetch(
+        `${supabaseUrl}/functions/v1/activate-invited-resident`,
+        {
+          method: "POST",
+          headers: {
+            apikey: anonKey,
+            Authorization: `Bearer ${anonKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            token: verifiedToken,
+            password: parsed.data.password,
+          }),
+        }
+      )
+    } catch {
+      return {
+        error:
+          "Layanan aktivasi sedang tidak tersedia. Silakan coba beberapa saat lagi.",
+      }
     }
 
-    if (signUpDecision.action === "attempt_sign_in") {
-      // Existing confirmed users prove ownership via their current password.
-      // Unconfirmed accounts receive `email_not_confirmed` -> guided confirmation flow.
-      const { data: signInData, error: signInError } =
-        await supabase.auth.signInWithPassword({
-          email: invitedEmail,
-          password: parsed.data.password,
-        })
+    const activateBody = (await activateRes.json().catch(() => null)) as {
+      ok?: boolean
+      status?: string
+      reason?: string
+      error?: string
+    } | null
 
-      const signInDecision = resolveActivationSignInOutcome({
-        signInError: signInError as
-          | { code?: string; message?: string; status?: number }
-          | null,
-        hasSignInSession: Boolean(signInData?.session),
+    if (!activateRes.ok || !activateBody?.ok) {
+      if (activateBody?.reason) {
+        return { error: mapRedeemErrorMessage(activateBody.reason) }
+      }
+      return {
+        error:
+          "Gagal membuat kredensial akun. Pastikan kata sandi memenuhi syarat keamanan.",
+      }
+    }
+
+    // Sign in immediately using the newly created confirmed account (or verify password for existing user)
+    const { data: signInData, error: signInError } =
+      await supabase.auth.signInWithPassword({
+        email: invitedEmail,
+        password: parsed.data.password,
       })
 
-      if (signInDecision.action === "needs_email_confirmation") {
-        return {
-          ok: false,
-          error: null,
-          needsEmailConfirmation: true,
-          confirmationMessage: signInDecision.message,
-        }
-      }
+    const signInDecision = resolveActivationSignInOutcome({
+      signInError: signInError as
+        | { code?: string; message?: string; status?: number }
+        | null,
+      hasSignInSession: Boolean(signInData?.session),
+    })
 
-      if (signInDecision.action === "fail") {
-        return { error: signInDecision.error }
+    if (signInDecision.action === "needs_email_confirmation") {
+      return {
+        ok: false,
+        error: null,
+        needsEmailConfirmation: true,
+        confirmationMessage: signInDecision.message,
       }
+    }
+
+    if (signInDecision.action === "fail") {
+      return { error: signInDecision.error }
     }
 
     isNewSessionCreatedHere = true
@@ -506,14 +521,6 @@ export async function redeemInvitationAction(
 
   const result = redeemData as Record<string, unknown>
   const tenantId = typeof result.tenant_id === "string" ? result.tenant_id : ""
-  const tenantName =
-    typeof result.tenant_name === "string" ? result.tenant_name : "RT Anda"
-  const rtNumber =
-    typeof result.rt_number === "string" ? result.rt_number : "-"
-  const rwNumber =
-    typeof result.rw_number === "string" ? result.rw_number : "-"
-  const residentName =
-    typeof result.resident_name === "string" ? result.resident_name : "Warga"
 
   if (tenantId) {
     const {
@@ -534,18 +541,7 @@ export async function redeemInvitationAction(
   revalidatePath("/select-tenant")
   revalidatePath("/resident-invitations")
 
-  return {
-    ok: true,
-    error: null,
-    activated: {
-      tenantId,
-      tenantName,
-      rtNumber,
-      rwNumber,
-      residentName,
-      assignedRole: "warga",
-    },
-  }
+  redirect("/resident")
 }
 
 export async function resendInvitationConfirmationAction(

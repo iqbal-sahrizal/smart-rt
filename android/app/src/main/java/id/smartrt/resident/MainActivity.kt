@@ -105,6 +105,9 @@ class MainActivity : AppCompatActivity() {
             tokenProvider = { SmartRtNotificationManager.getStoredFcmToken(this) }
         )
 
+        // 6.1 Configure Pull-to-Refresh wrapper (active only when WebView is scrolled to top)
+        setupPullToRefresh()
+
         // 7. Initialize FCM channels & token pre-fetch
         SmartRtNotificationManager.initChannels(this)
         SmartRtNotificationManager.fetchFcmToken { token ->
@@ -151,6 +154,22 @@ class MainActivity : AppCompatActivity() {
      * whatever page it already had open, with no navigation and no page reload.
      */
     private fun handleDeepLinkIntent(intent: Intent?, isNewIntent: Boolean) {
+        if (intent?.action == Intent.ACTION_VIEW && intent.data != null) {
+            when (
+                val decision = deepLinkResolver.resolveAppLink(
+                    rawUrl = intent.dataString,
+                    webBaseUrl = BuildConfig.WEB_BASE_URL,
+                    isNewIntent = isNewIntent
+                )
+            ) {
+                is DeepLinkDecision.Load -> binding.webView.loadUrl(decision.url)
+                DeepLinkDecision.Ignore -> if (!isNewIntent) {
+                    binding.webView.loadUrl("${BuildConfig.WEB_BASE_URL}/resident")
+                }
+            }
+            return
+        }
+
         val targetUrl = intent?.getStringExtra("target_url")
         val navToken = intent?.getStringExtra("nav_token")
 
@@ -158,6 +177,20 @@ class MainActivity : AppCompatActivity() {
             is DeepLinkDecision.Load -> binding.webView.loadUrl(decision.url)
             DeepLinkDecision.Ignore -> if (!isNewIntent) {
                 binding.webView.loadUrl("${BuildConfig.WEB_BASE_URL}/resident")
+            }
+        }
+    }
+
+    private fun setupPullToRefresh() {
+        binding.swipeRefreshLayout.setColorSchemeResources(R.color.brand_primary)
+        binding.swipeRefreshLayout.setOnChildScrollUpCallback { _, _ ->
+            !canTriggerPullToRefresh(binding.webView.scrollY, isErrorStateVisible)
+        }
+        binding.swipeRefreshLayout.setOnRefreshListener {
+            if (canTriggerPullToRefresh(binding.webView.scrollY, isErrorStateVisible)) {
+                binding.webView.reload()
+            } else {
+                binding.swipeRefreshLayout.isRefreshing = false
             }
         }
     }
@@ -196,6 +229,7 @@ class MainActivity : AppCompatActivity() {
 
             override fun onPageLoadingFinished(url: String?) {
                 binding.progressBar.visibility = View.GONE
+                binding.swipeRefreshLayout.isRefreshing = false
             }
 
             override fun onNetworkError(errorCode: Int, description: String?, failingUrl: String?) {
@@ -297,6 +331,7 @@ class MainActivity : AppCompatActivity() {
     private fun showErrorOverlay(title: String, message: String, iconRes: Int) {
         isErrorStateVisible = true
         binding.progressBar.visibility = View.GONE
+        binding.swipeRefreshLayout.isRefreshing = false
         binding.webView.visibility = View.GONE
 
         binding.errorTitle.text = title
@@ -357,5 +392,14 @@ class MainActivity : AppCompatActivity() {
         CameraFileManager.cleanupCameraCache(this)
         CameraFileManager.cleanupPrivateDocsCache(this)
         super.onDestroy()
+    }
+
+    companion object {
+        internal fun canTriggerPullToRefresh(
+            scrollY: Int,
+            isErrorStateVisible: Boolean
+        ): Boolean {
+            return scrollY == 0 && !isErrorStateVisible
+        }
     }
 }

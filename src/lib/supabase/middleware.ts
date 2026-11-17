@@ -3,7 +3,12 @@ import { NextResponse, type NextRequest } from "next/server"
 
 import { getSupabaseConfig, isSupabaseConfigured } from "@/lib/supabase/config"
 
-export const PUBLIC_PATHS = ["/login", "/activate-account", "/auth/callback"]
+export const PUBLIC_PATHS = [
+  "/login",
+  "/activate-account",
+  "/auth/callback",
+  "/.well-known",
+]
 
 export function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some(

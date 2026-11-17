@@ -23,6 +23,7 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             isDebuggable = true
+            manifestPlaceholders["appLinksHost"] = "smart-rt-nine.vercel.app"
             buildConfigField("String", "WEB_BASE_URL", "\"https://smart-rt-nine.vercel.app\"")
             buildConfigField("String", "ALLOWED_HOST", "\"smart-rt-nine.vercel.app\"")
             buildConfigField("String", "ALLOWED_ORIGIN", "\"https://smart-rt-nine.vercel.app\"")
@@ -31,6 +32,7 @@ android {
             initWith(getByName("debug"))
             applicationIdSuffix = ".staging"
             matchingFallbacks += listOf("debug")
+            manifestPlaceholders["appLinksHost"] = "smart-rt-nine.vercel.app"
             buildConfigField("String", "WEB_BASE_URL", "\"https://smart-rt-nine.vercel.app\"")
             buildConfigField("String", "ALLOWED_HOST", "\"smart-rt-nine.vercel.app\"")
             buildConfigField("String", "ALLOWED_ORIGIN", "\"https://smart-rt-nine.vercel.app\"")
@@ -41,6 +43,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            manifestPlaceholders["appLinksHost"] = "resident.smartrt.id"
             buildConfigField("String", "WEB_BASE_URL", "\"https://resident.smartrt.id\"")
             buildConfigField("String", "ALLOWED_HOST", "\"resident.smartrt.id\"")
             buildConfigField("String", "ALLOWED_ORIGIN", "\"https://resident.smartrt.id\"")
@@ -74,6 +77,7 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("androidx.activity:activity-ktx:1.8.1")
     implementation("androidx.webkit:webkit:1.11.0")
+    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
 
     // Coroutines — required for DocumentActionController background download
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")

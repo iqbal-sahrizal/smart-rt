@@ -79,6 +79,25 @@ export function resolveNotificationDestination(
       case "resident_invitations":
       case "resident_invitation":
         return "/resident-invitations"
+      case "complaints":
+      case "complaint":
+        return safeId ? `/pengaduan/${safeId}` : "/pengaduan"
+      case "letter_requests":
+      case "letter_request":
+      case "letters":
+      case "letter":
+        return "/surat"
+      case "activities":
+      case "activity":
+        return safeId ? `/kegiatan/${safeId}` : "/kegiatan"
+      case "ronda_schedules":
+      case "ronda_schedule":
+      case "ronda":
+        return "/ronda"
+      case "community_post":
+      case "community_posts":
+      case "community":
+        return "/komunitas"
       default:
         return null
     }
@@ -104,6 +123,25 @@ export function resolveNotificationDestination(
     case "resident_invitations":
     case "resident_invitation":
       return "/resident/profile"
+    case "complaints":
+    case "complaint":
+      return safeId ? `/resident/complaints/${safeId}` : "/resident/complaints"
+    case "letter_requests":
+    case "letter_request":
+    case "letters":
+    case "letter":
+      return safeId ? `/resident/letters/${safeId}` : "/resident/letters"
+    case "activities":
+    case "activity":
+      return safeId ? `/resident/activities/${safeId}` : "/resident/activities"
+    case "ronda_schedules":
+    case "ronda_schedule":
+    case "ronda":
+      return safeId ? `/resident/ronda/${safeId}` : "/resident/ronda"
+    case "community_post":
+    case "community_posts":
+    case "community":
+      return "/resident/feed"
     default:
       return null
   }

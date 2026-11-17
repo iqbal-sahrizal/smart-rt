@@ -1,160 +1,73 @@
-# Smart RT — Business Event Notification Matrix
+# Smart RT — Business Event Notification Matrix (Phase 1 Audit)
 
 **Date:** 2026-11-17
-**Method:** Direct source audit (server actions in `src/app/actions/`, atomic RPCs in `supabase/migrations/20261114001500_storage_and_atomic_rpcs.sql`, table/RLS definitions, and `src/lib/notifications/types.ts`). Nothing below is assumed — every row cites the exact file/function/column it was read from. Where something was not found, it is marked **NOT FOUND** rather than guessed.
+**Method:** Direct source audit (migrations, Server Actions, repository modules). Nothing in this matrix is assumed — every row is backed by an exact file/function/table reference found in source. Where no notification-worthy event exists, that is stated explicitly with the reason, per the audit instruction not to invent events.
 
 ---
 
-## 0. Existing Notification Infrastructure (baseline, confirmed by source)
+## 1. Foundational facts that shape every row below
 
-| Component | Status |
-|---|---|
-| `public.notifications` table (in-app bell) | Exists (`20261113000700_create_audit_notification_domain.sql`): `tenant_id`, `recipient_user_id`, `title`, `body`, `type`, `reference_type`, `reference_id`, `is_read`, `read_at`. FK to `tenant_members(tenant_id, user_id)` — recipient must be an active tenant member. |
-| RLS on `notifications` | `SELECT`/`UPDATE`: recipient-only (`recipient_user_id = auth.uid()` + tenant membership). **No `INSERT` policy exists for `authenticated`** — confirmed by reading `20261113001100_enable_rls_and_policies.sql` and `20261113001200_harden_rls_policies_and_insert_guards.sql` in full; only `SELECT`/`UPDATE` policies are defined. This means the table can only be written to via a `SECURITY DEFINER` function (RLS bypassed as the function owner), never a plain authenticated insert. |
-| Only existing writer of `public.notifications` | `supabase/migrations/20261116002500_create_community_feed.sql` — 4 call sites inside `SECURITY DEFINER` RPCs (`create_community_post_comment`, and 3 others for likes/reports — not individually re-verified here), each doing a direct `INSERT INTO public.notifications (...)` in the same transaction as the business write. **This is the only precedent for notification creation anywhere in the codebase.** Community feed comment/reply notifications are in-app only — no push/FCM dispatch exists for them either. |
-| `user_device_tokens` + `send-fcm-notification` Edge Function | Exists and PASS per Phase 5.1.1/5.1 — accepts `tenant_id`, `recipient_user_ids[]`, `title`, `body`, generic `data` map. Not modified by this phase. |
-| `resolveNotificationDestination()` (`src/lib/notifications/types.ts`) | Resident-scope switch currently covers: `announcements`, `bills`, `payments`, `households`, `residents`/`resident_invitations`. **Missing resident-scope mappings for: `complaints`, `letter_requests`, `activities`/`kegiatan`, `ronda`.** Admin-scope switch covers `announcements`, `bills`, `dues`, `payments`, `cash`, `residents`, `resident_invitations` — also missing `complaints`, `letter_requests`, `activities`. |
-| Atomic business RPCs | `supabase/migrations/20261114001500_storage_and_atomic_rpcs.sql` is the single file containing nearly every state-transition RPC relevant here (`verify_payment`, `reject_payment`, `refund_payment`, `attach_payment_proof`, `transition_complaint_status`, `review_letter_request`, `cancel_letter_request`, `issue_letter`, `transition_activity_status`, `soft_delete_activity`, `record_activity_attendance`, etc.). Every one read follows the identical shape: validate → mutate → `INSERT INTO public.audit_logs(...)` → `RETURN`. This is the natural, already-transactional insertion point for a notification-outbox write (see architecture doc).
-
----
-
-## 1. Announcements (Pengumuman)
-
-| Field | Value |
-|---|---|
-| Trigger file/function | `src/app/actions/announcements.ts` → `createAnnouncementAction` |
-| Mutation | Direct `.insert()` on `public.announcements` (**not** an RPC) |
-| Success condition | `input.status === "published"` (quoted: `const publishedAt = input.status === "published" ? new Date().toISOString() : null`) — a `"draft"` save does not qualify |
-| Recipients | Already resolved server-side into `public.announcement_recipients` via `buildRecipientInsertRows({ targetType, roleIds, householdIds })`, inserted right after the announcement row (same action, two sequential inserts with manual rollback-on-failure of the first insert if the second fails) |
-| Tenant scope | `tenant.tenantId` from `requireAdminContext()`, used in every insert/select |
-| Suggested title/body | Announcement title + a short excerpt of `content` |
-| `reference_type` / `reference_id` | `"announcement"` / announcement id — already supported by `resolveNotificationDestination` (both scopes) |
-| In-app notification today | **Not found** — no insert into `notifications` anywhere in the announcements code path |
-| Push today | None |
-| Deep link mapping | Already present for both scopes |
-
-## 2. Bills (Tagihan)
-
-| Field | Value |
-|---|---|
-| Trigger file/function | `src/app/actions/finance.ts` → `createBillAction` (single) and `generateBillsAction` (bulk — not individually re-read, assumed structurally similar; **flagged for confirmation at implementation time**) |
-| Mutation | Direct `.insert()` on `public.bills` (**not** an RPC) |
-| Success condition | Insert succeeds with `status: "unpaid"` — a bill only exists once issued; there is no separate "draft" bill state in `createBillAction` |
-| Recipients | `due.target_scope === "household"` → `household_id` set (needs resolving to the household's linked resident account(s)); else `resident_id` set directly. The exact household→user_id join was **not independently re-traced** in this pass — `checkResidentOwnsBill` (`src/lib/finance/ownership.ts`) already implements this exact mapping for authorization and should be reused rather than re-derived |
-| Tenant scope | `tenant.tenantId` from `requireAdminContext()` |
-| Suggested title/body | "Tagihan baru: {due name} — {period}" / amount + due date |
-| `reference_type` / `reference_id` | `"bill"` / bill id — mapping exists |
-| In-app notification today | Not found |
-| Push today | None |
-| Deep link mapping | Already present for both scopes |
-
-## 3. Payments & Verification (Pembayaran)
-
-| Field | Value |
-|---|---|
-| Submission trigger | `src/app/actions/finance.ts` → `submitResidentPaymentAction` (resident uploads proof) and `retryPaymentProofAction` |
-| Verification trigger | `verifyPaymentAction` → RPC `public.verify_payment(p_payment_id, p_cash_category_id, p_notes)` |
-| Rejection trigger | `rejectPaymentAction` → RPC `public.reject_payment(p_payment_id, p_reason)` |
-| Refund trigger | `refundPaymentAction` → RPC `public.refund_payment(...)` (signature read, body not fully traced) |
-| Success condition — verified | RPC quoted: `IF v_pay.status IS DISTINCT FROM 'pending' THEN RAISE EXCEPTION ...` (only a `pending` payment can transition) → sets `status = 'verified'`. **Recipient: the resident who owns the bill** (`v_bill.resident_id` / `v_bill.household_id`, resolved inside the RPC via `SELECT * INTO v_bill FROM public.bills ... FOR UPDATE`) |
-| Success condition — rejected | Same pending-only guard → sets `status = 'rejected'`. Same recipient as above |
-| Success condition — submission (needs bendahara attention) | `submitResidentPaymentAction` inserting a new `payments` row with `status` presumably `'pending'` (not independently re-confirmed in this pass — the function body was read only through its validation section). **Recipient: bendahara/ketua_rt of that tenant** — a role-broadcast, not a single user; this is a different recipient-resolution shape than every other event audited here and must be resolved via `has_tenant_role`-style role lookup, not a single foreign key |
-| Tenant scope | `tenant.tenantId` from `requireAdminContext()`/`requireResidentContext()`; RPCs re-derive tenant from the locked row (`v_pay.tenant_id`) and re-check role server-side (`has_tenant_role`) — never trusts the caller's claimed tenant for the RPC path |
-| `reference_type` / `reference_id` | `"payment"` / payment id for the submission-direction event (no existing deep-link case for `"payment"` pointing at a payment id specifically — currently `payment`/`payments` resolves to `/resident/bills` generically, no admin-scope case for `payment` review queue item; **gap**). `"bill"` / bill id for verified/rejected (existing mapping) |
-| In-app notification today | Not found for any of these four events |
-| Push today | None |
-| Deep link mapping | Bill-side PASS (existing); payment-submission-to-bendahara side is a **gap** — needs an admin-scope `payment` → `/payments/{id}` case added |
-
-## 4. Letters & Permohonan Surat
-
-| Field | Value |
-|---|---|
-| Review trigger | `src/app/actions/letters.ts` → `reviewLetterRequestAction` → RPC `public.review_letter_request(p_request_id, p_decision, p_admin_notes)` |
-| Issuance trigger | `issueLetterAction` → RPC `public.issue_letter(p_request_id, p_storage_path)` |
-| Cancellation trigger | `cancelLetterRequestAction` → RPC `public.cancel_letter_request` (resident-initiated, requester cancelling their own request — likely does **not** need a notification, since the actor and the recipient would be the same person) |
-| Success condition — review | Quoted: `p_decision NOT IN ('reviewing', 'approved', 'rejected')` is rejected; only `'approved'`/`'rejected'` are terminal and notify-worthy — `'reviewing'` is an intermediate status change the task explicitly says to avoid notifying on ("Hindari notifikasi untuk perubahan internal yang tidak perlu diketahui warga") |
-| Success condition — issuance | Quoted: `IF v_lr.status <> 'approved' THEN RAISE EXCEPTION 'Only approved letter requests can be issued'` → sets `status = 'completed'` and allocates the official letter number |
-| Recipient | `v_lr.requested_by_member_id` (a `tenant_members.id`, **not** a `user_id` directly — requires one join to `tenant_members` to get `user_id`, same shape as the complaints table below) |
-| Tenant scope | `v_lr.tenant_id` re-derived from the locked row inside the RPC |
-| `reference_type` / `reference_id` | `"letter_request"` / request id — **no existing mapping in `resolveNotificationDestination` for either scope.** This is a genuine gap: residents have no way to deep-link to their letter request today via this helper. Must be added. |
-| In-app notification today | Not found |
-| Push today | None |
-
-## 5. Complaints & Replies (Keluhan)
-
-| Field | Value |
-|---|---|
-| Status-change trigger | `src/app/actions/complaints.ts` → `transitionComplaintStatusAction` → RPC `public.transition_complaint_status(p_complaint_id, p_new_status, p_reason)` |
-| Reply trigger | `createComplaintReplyAction` → `createComplaintReplyWithClient(supabase, ...)` (a TS helper, **not** confirmed to be an RPC — direct insert into `public.complaint_replies`, which has its own `complaint_replies_insert` RLS policy per `20261113001300_security_hardening_guards.sql`, implying regular authenticated inserts are already permitted there — meaning notification enqueue for replies cannot piggyback on a `SECURITY DEFINER` RPC transaction the way payment/letter events can, and needs the follow-up-enqueue-call pattern instead) |
-| Success condition — status change | Quoted: `p_new_status NOT IN ('in_progress', 'resolved', 'rejected')` rejected; `'resolved'`/`'rejected'` are the terminal, notify-worthy states for the reporter. `'in_progress'` is arguably also worth notifying ("someone is looking into it") but is lower priority |
-| Success condition — reply | Any successfully created reply row. **Direction matters**: `createComplaintReplyAction` supports both `operational.scope === "admin"` and (implicitly) a resident scope — meaning residents can also reply on their own complaint. Recipient resolution must therefore branch: admin→resident reply notifies the original reporter (`reporter_member_id` → `user_id`); resident→admin reply notifies **all users holding `ketua_rt`/`sekretaris`/`pengurus`** in that tenant — a role-broadcast, same shape as the payment-submission event above |
-| Recipient (status change) | `complaints.reporter_member_id` → join `tenant_members.id = reporter_member_id` → `tenant_members.user_id` |
-| Tenant scope | `v_c.tenant_id` re-derived inside the RPC; role re-checked via `has_tenant_role` |
-| `reference_type` / `reference_id` | `"complaint"` / complaint id — **no existing mapping in `resolveNotificationDestination`.** Gap. |
-| In-app notification today | Not found |
-| Push today | None |
-
-## 6. Activities (Kegiatan) & Attendance (Absensi)
-
-| Field | Value |
-|---|---|
-| Status-change trigger | `src/app/actions/activities.ts` → `transitionActivityStatusAction` → RPC `public.transition_activity_status(p_activity_id, p_new_status)` |
-| Creation trigger | `createActivityAction` — not re-traced in this pass whether it is a direct insert or RPC-backed; **flagged for confirmation at implementation time** |
-| Attendance trigger | `recordActivityAttendanceAction` → RPC `public.record_activity_attendance(...)` |
-| Success condition — status | Quoted transition guard: `scheduled→(ongoing,cancelled)`, `ongoing→(completed,cancelled)`. Per the task's own example ("Kegiatan ketika dipublikasikan atau ada pengingat yang relevan") and "avoid notifying on internal changes," the clearly notify-worthy transition here is **`cancelled`** (participants need to know); `ongoing`/`completed` are lower-value and likely skippable |
-| Success condition — creation/publish | Not yet confirmed whether `createActivityAction` has a draft/published distinction analogous to announcements, or activities are visible immediately on creation. **Needs confirmation before wiring** — do not assume a `status` field exists matching the announcements pattern |
-| Success condition — attendance | `record_activity_attendance` is pengurus recording who showed up **after the fact** — this is a backward-looking administrative record, not something the attendee needs pushed to them in real time. Classified as **internal, not notify-worthy** per the task's own guidance, consistent with the RLS hardening migration's restriction that residents cannot self-set `'attended'`/`'absent'` (`20261113001200_harden_rls_policies_and_insert_guards.sql`, item C) |
-| Recipients | For `cancelled`: registered participants (`activity_participants` table, referenced by the RLS hardening migration — not independently re-read for its exact columns in this pass) |
-| Tenant scope | `v_act.tenant_id` re-derived inside the RPC |
-| `reference_type` / `reference_id` | `"activity"` / activity id — **no existing mapping in `resolveNotificationDestination`.** Gap. |
-| In-app notification today | Not found |
-| Push today | None |
-
-## 7. Ronda (Jadwal Ronda Malam)
-
-| Field | Value |
-|---|---|
-| Trigger file | `src/app/actions/ronda.ts` (`upsertRondaScheduleAction`, `recordRondaAttendanceAction`) |
-| Audit depth | **Not independently traced in this pass** — function signatures enumerated only. No claim is made about success conditions, recipients, or existing notification/push status; this is explicitly left open rather than assumed |
-
-## 8. Dues configuration (Iuran templates) & Cash (Kas)
-
-| Field | Value |
-|---|---|
-| Trigger files | `finance.ts` → `createDuesAction`/`updateDuesAction`/`deleteDuesAction` (dues = reusable iuran **templates**, not individual resident-facing bills — the resident-facing instance is the Bill, already covered in §2); `createCashCategoryAction`/`toggleCashCategoryAction`/`createCashExpenseAction`/`updateCashExpenseAction` (internal RT bookkeeping ledger) |
-| Assessment | Both are **administrative configuration / internal bookkeeping**, not events a resident needs pushed to them — consistent with the task's own instruction to avoid notifying on internal changes. No notification wiring recommended for these; documented here so they are not silently missing from the audit, per the instruction to inventory "iuran/kas" explicitly |
-
-## 9. Community Feed (existing partial coverage)
-
-| Field | Value |
-|---|---|
-| Trigger | `supabase/migrations/20261116002500_create_community_feed.sql` — `create_community_post_comment` and (per the earlier grep hit count of 4) at least 2–3 other `SECURITY DEFINER` RPCs, not all individually re-read in this pass |
-| Existing in-app notification | **Confirmed present** — `INSERT INTO public.notifications` with `type = 'community_comment'` / `'community_comment_reply'`, inside the same RPC transaction as the comment write. Already handles self-notify avoidance and duplicate-recipient avoidance (post author vs. parent comment author) |
-| Existing push | **Not found** — no call to `send-fcm-notification` or any outbox exists for these events today |
-| Deep link | `reference_type: 'community_post'` — **not currently handled by `resolveNotificationDestination`** for either scope (only `community_post` as a raw string is stored; the helper has no matching `case`). Gap, but lower priority since in-app already works via a different code path presumably reading the row directly (not re-traced) |
-
-## 10. Resident Invitations
-
-| Field | Value |
-|---|---|
-| Assessment | An invited person has no account and no registered FCM device token at invitation time — a push notification has no addressable recipient at this point in the flow by construction. **Not applicable for push notification wiring.** Existing admin-scope deep link mapping for `resident_invitations` already exists for in-app/email-adjacent use. |
+- **In-app notifications (`public.notifications`) can only be inserted by a `SECURITY DEFINER` function.** There is no `INSERT` RLS policy for the `authenticated` role on this table (confirmed in `20261113001100_enable_rls_and_policies.sql` and `20261113001200_harden_rls_policies_and_insert_guards.sql` — only `SELECT`/`UPDATE` policies exist). Every existing notification-creating function is `SECURITY DEFINER`.
+- **The only existing precedent** is 4 hand-written `INSERT INTO public.notifications` blocks inside Community Feed RPCs (`create_community_post_comment`, `moderate_community_post`, `moderate_community_comment` — all in `supabase/migrations/20261116002500_create_community_feed.sql`, lines 1342/1373/1810/1996). No shared/generic notification-creation helper exists anywhere (confirmed via repo-wide grep for `create_notification`/`insert_notification`/`notify_`).
+- **No push dispatch is wired to anything yet** — these 4 existing events are in-app-bell-only.
+- **No pg_cron, pg_net, or Vault usage exists anywhere** in the migrations — any scheduled dispatcher is new infrastructure, not an extension of something existing.
+- **No existing multi-recipient/broadcast resolver** exists in `src/lib/` — `resolveScopedNotificationContext` only resolves the *current caller's own* read scope, not "all residents in tenant X" or "all staff with role Y".
+- **Recipient-resolution join pattern** (used consistently below): `public.tenant_members` is the only table with `user_id` + `status`. A business row almost never stores `user_id` directly — it stores `resident_id` or `*_member_id`, which must be joined through `tenant_members` (`resident_id` → `tenant_members.resident_id`, unique per tenant; or `*_member_id` → `tenant_members.id` directly) **and filtered `status = 'active'`** before a push token lookup is meaningful. A bill addressed to a `resident_id` with no matching active `tenant_members` row (e.g. a child with no login) has **no valid recipient** — this must resolve to "no-op", not an error.
+- **Deep-link mapping status**: `resolveNotificationDestination()` (`src/lib/notifications/types.ts`) already covers `announcements`, `bills`, `payments`, `households`, `residents` for resident scope. It has **no case** for complaints, letters, activities, ronda, or any `community_*` type — these must be added (Phase 5).
 
 ---
 
-## 11. Summary — Confirmed Notify-Worthy Events for Phase 2/3 Wiring
+## 2. Matrix
 
-| # | Event | Confirmed trigger | Recipient shape | Status |
-|---|---|---|---|---|
-| 1 | Announcement published | `createAnnouncementAction` | Pre-resolved list (`announcement_recipients`) | Ready to wire |
-| 2 | Bill issued | `createBillAction` (+ `generateBillsAction`, unconfirmed) | Single resident or household | Ready to wire (household→user join needs reuse of `checkResidentOwnsBill`) |
-| 3 | Payment verified | RPC `verify_payment` | Single resident (via bill) | Ready to wire |
-| 4 | Payment rejected | RPC `reject_payment` | Single resident (via bill) | Ready to wire |
-| 5 | Payment submitted (needs review) | `submitResidentPaymentAction` | Role-broadcast (bendahara/ketua_rt) | Ready to wire, needs admin deep-link gap closed |
-| 6 | Letter approved/rejected | RPC `review_letter_request` | Single resident (via member join) | Ready to wire, needs deep-link gap closed |
-| 7 | Letter issued | RPC `issue_letter` | Single resident | Ready to wire, needs deep-link gap closed |
-| 8 | Complaint resolved/rejected | RPC `transition_complaint_status` | Single resident (via member join) | Ready to wire, needs deep-link gap closed |
-| 9 | Complaint reply (admin→resident) | `createComplaintReplyAction` | Single resident | Ready to wire, needs deep-link gap closed |
-| 10 | Complaint reply (resident→admin) | `createComplaintReplyAction` | Role-broadcast | Ready to wire, needs admin deep-link gap closed |
-| 11 | Activity cancelled | RPC `transition_activity_status` | Participant list (`activity_participants`, not re-verified) | Needs recipient-table confirmation before wiring |
+| # | Feature / Event | Trigger file : function | Table / RPC | Success condition | Recipient(s) | Tenant scope | Title/body basis | Deep link (reference_type / id) | In-app today? | Push today? | Idempotency/retry today? |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | **Community** — comment on post | `20261116002500...sql` : `create_community_post_comment` | `community_post_comments` (RPC, already `SECURITY DEFINER`) | Comment insert succeeds | Post author (via `tenant_members`, self-notify guarded) | `p_tenant_id`, server-resolved | `"Komentar baru pada postingan Anda"` + preview | `community_post` / `post_id` | **Yes** | No | No (single hand-written INSERT, no retry concept) |
+| 2 | **Community** — reply to comment | same function | same | Reply insert succeeds | Parent-comment author (guarded vs. post-author duplicate) | same | `"Balasan baru pada komentar Anda"` | `community_post` / `post_id` | **Yes** | No | No |
+| 3 | **Community** — post hidden/restored | `moderate_community_post` | same migration | Moderation action succeeds | Post author | same | `"Postingan Anda disembunyikan/dipulihkan..."` | `community_post` / `post_id` | **Yes** | No | No |
+| 4 | **Community** — comment hidden/restored | `moderate_community_comment` | same migration | Moderation action succeeds | Comment author | same | same pattern | `community_post` / `post_id` (parent post) | **Yes** | No | No |
+| 5 | **Announcements** — published | `src/app/actions/announcements.ts` : `createAnnouncementAction`/`updateAnnouncementAction` | `public.announcements` + `public.announcement_recipients` (**plain `.from()` insert, not RPC**) | `status` is/becomes `'published'` | Residents matched by `target_type` (`all` / role-filtered / household-filtered), resolved server-side via `verifyRecipientTargets`/`buildRecipientInsertRows` | `requireAdminContext().tenant.tenantId` | Announcement title/body | `announcements` / announcement id — **mapping already exists** | No | No | No |
+| 6 | **Bills** — issued to resident/household | `src/app/actions/finance.ts` : `createBillAction`, `generateBillsAction` (bulk) | `public.bills` (**plain insert**, no RPC) | Row inserted with a resident/household target | The specific `bills.resident_id`'s tenant_member, **or** all active residents of `bills.household_id` if `resident_id IS NULL` | `requireAdminContext()` | Bill period, amount, due date | `bills` / bill id — **mapping already exists** | No | No | No |
+| 7 | **Payments** — verified | `finance.ts`:`verifyPaymentAction` → `verify_payment` RPC | `public.payments`/`public.bills` (RPC, `SECURITY DEFINER`, confirmed) | RPC returns successfully; `payments.status → 'verified'`, `bills.status` recomputed | The bill's resident (via `payments.bill_id → bills.resident_id → tenant_members`) | `v_pay.tenant_id` (resolved inside the RPC from the locked payment row) | New bill status (paid/partial), amount | `payments` / payment id — **mapping already exists** | No | No | No |
+| 8 | **Payments** — rejected | `finance.ts`:`rejectPaymentAction` → `reject_payment` RPC | same tables (RPC, `SECURITY DEFINER`, confirmed) | RPC returns successfully | Same resident | same | Rejection reason | `payments` / payment id | No | No | No |
+| 9 | **Payments** — refunded | `finance.ts`:`refundPaymentAction` → `refund_payment` RPC | same (RPC, `SECURITY DEFINER`, confirmed by function listing — body not fully re-read, signature confirmed) | RPC returns successfully | Same resident | same | Refund amount | `payments` / payment id | No | No | No |
+| 10 | **Letters** — reviewed (approved/rejected) | `src/app/actions/letters.ts`:`reviewLetterRequestAction` → `review_letter_request` RPC | `public.letter_requests` (RPC, `SECURITY DEFINER`, confirmed) | RPC returns successfully; `status → approved\|rejected` | Requester, via `letter_requests.resident_id → tenant_members` (**not** `requested_by_member_id`, which is who filed it — if different from the resident the letter is *for*, the resident is still the right notify target; confirmed both columns exist, resident_id is the canonical subject) | `requireScopedContext("admin")` resolved tenant | Letter type, decision, admin notes | **gap — not in `resolveNotificationDestination` yet** | No | No | No |
+| 11 | **Letters** — issued (PDF ready) | `letters.ts`:`issueLetterAction` → `issue_letter` RPC | same (RPC, `SECURITY DEFINER`, confirmed) | RPC returns a letter number successfully; `status → issued`-equivalent (confirmed: issuance requires prior `status = 'approved'`) | Same requester resolution as #10 | same | Letter number | **gap** | No | No | No |
+| 12 | **Complaints** — reply posted | `src/app/actions/complaints.ts`:`createComplaintReplyAction` → `createComplaintReplyWithClient` (**plain `.from("complaint_replies").insert()`, not RPC**) | `public.complaint_replies` | Reply insert succeeds | **Direction-aware**: if `scope === "admin"` replied → notify reporter (`complaints.reporter_member_id → tenant_members`); if `scope === "resident"` replied → notify active staff (`ketua_rt`/`sekretaris`/`pengurus`) in that tenant — **this direction is a genuinely new fan-out shape, not covered by any existing single-recipient pattern** | `tenant.tenantId` from scoped context | Reply author label + message preview | **gap** | No | No | No |
+| 13 | **Complaints** — status changed | `complaints.ts`:`transitionComplaintStatusAction` → `transition_complaint_status` RPC | `public.complaints` (RPC, `SECURITY DEFINER`, confirmed — allowed transitions: `open→in_progress`, `*→resolved`, `*→rejected`; no reopen) | RPC returns successfully | Reporter (`complaints.reporter_member_id → tenant_members`) | `v_c.tenant_id` resolved inside RPC | New status, reason | **gap** | No | No | No |
+| 14 | **Activities** — created/published | `src/lib/activities/repository.ts` → `create_activity` RPC (`20261116002300_activities_security_gap_closure.sql`, confirmed `SECURITY DEFINER`) | `public.activities` | RPC returns an activity id successfully (activities have **no separate draft/publish state** — `scheduled` is the initial, immediately-visible status) | **All active residents in tenant** — genuinely new broadcast shape, no existing precedent for "all residents" fan-out | `p_tenant_id` param, re-validated by `has_tenant_role` inside the RPC | Activity title, date/location | **gap** | No | No | No |
+| 15 | **Activities** — cancelled | `activities.ts`:`transitionActivityStatusAction` → `transition_activity_status` RPC (confirmed `SECURITY DEFINER`) | `public.activities`/`activity_participants` | `status → 'cancelled'` specifically (not `ongoing`/`completed` — those are not notification-worthy per "avoid notifying on internal changes") | Participants with `rsvp_status IN ('invited','attending')` (not already `absent`) | `v_act.tenant_id` inside RPC | Cancellation notice | **gap** | No | No | No |
+| 16 | **Ronda** — schedule published | `20261115002000_create_ronda_schedule.sql` → `upsert_ronda_schedule_with_roster` (confirmed `SECURITY DEFINER`) | `public.ronda_schedules` + roster | RPC returns successfully for a new/updated schedule | Roster members for that schedule | tenant scope resolved inside RPC | Shift date/time | **gap** | No | No | No |
 
-Not wired, with explicit reasoning: activity creation/publish (success condition unconfirmed), ronda (not audited), dues/cash (internal, not resident-facing by design), activity attendance (internal/backward-looking), resident invitations (no addressable device token yet).
+---
+
+## 3. Confirmed NOT notification-worthy (explicit, with reasoning — not assumed)
+
+| Feature | Reason no event is modeled |
+|---|---|
+| **Dues (Iuran templates/rates)** | `src/lib/finance/types.ts` (`DuesSummary`, `DuesTargetHouseholdOption`) confirms Dues are admin-only recurring-charge *templates*; they generate individual **Bills** (row #6 above) via `generateBillsAction`, which is the actual resident-facing artifact. A "dues created" event has no direct resident recipient. |
+| **Cash transactions / categories** | `public.cash_transactions`/`cash_categories` have no resident/household attribution column — purely internal treasury bookkeeping (confirmed by schema and by `verify_payment`'s own cash-transaction insert, which has no recipient concept). |
+| **Resident invitations** | The invited person has no `auth.users` row and no `tenant_members` row until `redeemInvitationAction` succeeds — there is no valid push/in-app target to notify *before* redemption, and no admin-facing "invitation redeemed" event exists in the required-minimum list. |
+| **Residents/Household CRUD** | `src/app/actions/residents.ts` — admin-only maintenance operations (`canManageResidents` gated), not resident-facing status transitions. |
+| **Tenant settings / branding** | `src/app/actions/tenant-settings.ts` — admin-only identity/logo configuration, never resident-facing. |
+| **Letter types, cash categories (CRUD)** | Admin configuration tables, not business events a resident experiences. |
+| **Activity `ongoing`/`completed` transitions, RSVP self-registration (`register_for_activity`)** | Internal/self-initiated state changes with no new information for *other* residents to receive. |
+
+---
+
+## 4. Flagged as optional / lower priority (explicit scoping decision, not silently dropped)
+
+| Feature | Why it's optional | Decision |
+|---|---|---|
+| **Activity attendance marking** (`record_activity_attendance`, admin marks a resident attended/absent after the fact) | Debatable value — could read as surveillance-ish or just noisy; not in the task's example list. | Not wired in Phase 3 by default; flagged here so the operator can request it explicitly. |
+| **Ronda attendance confirmation** (`record_ronda_attendance`) | Same reasoning. | Same — flagged, not wired by default. |
+
+---
+
+## 5. Summary counts
+
+- **16 concrete events identified** across 8 domains / feature areas (Community Feed ×4, Announcements ×1, Bills ×1, Payments ×3, Letters ×2, Complaints ×2, Activities ×2, Ronda ×1 — or 7 if Bills + Payments are grouped as Finance).
+- **4 already have in-app notifications** (all Community Feed); **0 have push** connected.
+- **12 events have zero notification coverage today** (in-app or push) across 7 domains — this is the scope wired into `notification_outbox` in Phase 2/3 (`20261117002700_create_notification_outbox_engine.sql`). Community Feed's 4 pre-existing events remain in-app-only in `20261116002500_create_community_feed.sql`.
+- **9 of 16 events already sit inside a `SECURITY DEFINER` RPC** — the cheapest, safest, most architecture-consistent extension point (append to the existing function body via `CREATE OR REPLACE FUNCTION`, same transaction, same pattern as Community Feed).
+- **3 of 16 events currently use a plain, non-RPC insert** (Bills, Announcements, Complaint replies) and need a small, purpose-built wrapper `SECURITY DEFINER` RPC each, called immediately after the existing insert succeeds — without touching or refactoring the existing insert logic itself.
+- **2 events require genuinely new recipient-resolution shapes** not seen anywhere in the existing codebase: broadcast-to-all-active-residents (Activities created) and direction-aware reply routing (Complaints reply). These are called out explicitly in the architecture doc as new, not duplicated, logic.
