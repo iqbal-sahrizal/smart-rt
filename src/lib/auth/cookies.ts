@@ -4,6 +4,8 @@ import { cookies, headers } from "next/headers"
 
 import { WORKSPACE_COOKIE_NAME } from "@/lib/auth/workspace"
 
+export { resolveSafeNextPath } from "@/lib/auth/next-path"
+
 async function isHttpsOrigin(): Promise<boolean> {
   const headerStore = await headers()
   const proto = headerStore.get("x-forwarded-proto")
@@ -34,17 +36,4 @@ export async function clearWorkspaceCookie(): Promise<void> {
   cookieStore.delete(WORKSPACE_COOKIE_NAME)
 }
 
-/**
- * Validates internal post-login redirect targets to avoid open-redirect attacks.
- */
-export function resolveSafeNextPath(rawNext: unknown): string | null {
-  if (typeof rawNext !== "string") return null
-  const trimmed = rawNext.trim()
-  if (!trimmed.startsWith("/")) return null
-  if (trimmed.startsWith("//") || trimmed.includes("\\")) return null
-  if (trimmed === "/activate-account" || trimmed.startsWith("/activate-account?")) {
-    return trimmed
-  }
-  return null
-}
 

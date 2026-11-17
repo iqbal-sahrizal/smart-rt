@@ -1,0 +1,105 @@
+{
+  "project_info": {
+    "project_number": "388918324584",
+    "project_id": "smart-rt-15e23",
+    "storage_bucket": "smart-rt-15e23.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:388918324584:android:41d67297b0d85329467add",
+        "android_client_info": {
+          "package_name": "id.smartrt.resident"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBYfS55wSATK3NgrJ2BWii8Ao0qnlvX__c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:388918324584:android:41d67297b0d85329467add",
+        "android_client_info": {
+          "package_name": "id.smartrt.resident.staging"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBYfS55wSATK3NgrJ2BWii8Ao0qnlvX__c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:388918324584:android:41d67297b0d85329467add",
+        "android_client_info": {
+          "package_name": "id.smartrt.resident.debug"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBYfS55wSATK3NgrJ2BWii8Ao0qnlvX__c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:388918324584:android:41d67297b0d85329467add",
+        "android_client_info": {
+          "package_name": "id.smartrt.resident.staging"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBYfS55wSATK3NgrJ2BWii8Ao0qnlvX__c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:388918324584:android:41d67297b0d85329467add",
+        "android_client_info": {
+          "package_name": "id.smartrt.resident.debug"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBYfS55wSATK3NgrJ2BWii8Ao0qnlvX__c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,8 +1,9 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
+import { PwaManager } from "@/components/pwa/pwa-manager";
 import "./globals.css";
 
 const inter = Inter({
@@ -17,9 +18,30 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#2563EB",
+};
+
 export const metadata: Metadata = {
   title: "Smart RT",
   description: "Modern neighborhood & community management platform.",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Smart RT",
+  },
+  icons: {
+    icon: [
+      { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -37,6 +59,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <TooltipProvider>
             {children}
             <Toaster position="bottom-right" />
+            <PwaManager />
           </TooltipProvider>
         </QueryProvider>
       </body>

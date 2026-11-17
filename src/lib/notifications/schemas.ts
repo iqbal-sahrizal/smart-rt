@@ -37,3 +37,13 @@ export const notificationsApiQuerySchema = z.object({
     .optional(),
 })
 
+export const registerDeviceTokenSchema = z.object({
+  fcmToken: z.string().trim().min(10).max(4096),
+  platform: z.enum(["android", "ios", "web"]).default("android"),
+  deviceInfo: z.record(z.string(), z.unknown()).default({}),
+})
+
+export const unregisterDeviceTokenSchema = z.object({
+  fcmToken: z.string().trim().min(10).max(4096),
+})
+

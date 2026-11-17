@@ -6,6 +6,8 @@ import { resolveScopedNotificationContext } from "@/lib/notifications/queries"
 import {
   markAllNotificationsReadSchema,
   markNotificationReadSchema,
+  registerDeviceTokenSchema,
+  unregisterDeviceTokenSchema,
 } from "@/lib/notifications/schemas"
 import type {
   NotificationMutationResult,
@@ -168,5 +170,61 @@ export async function markAllNotificationsAsReadAction(input: {
     updatedCount: data?.length ?? 0,
     readAt: nowIso,
   }
+}
+
+export async function registerDeviceTokenAction(input: {
+  fcmToken: string
+  platform?: "android" | "ios" | "web"
+  deviceInfo?: Record<string, unknown>
+}): Promise<{ ok: boolean; error: string | null }> {
+  const parsed = registerDeviceTokenSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: "Parameter token tidak valid." }
+  }
+
+  let resolved = await resolveScopedNotificationContext("resident")
+  if (resolved.status !== "ok") {
+    resolved = await resolveScopedNotificationContext("admin")
+    if (resolved.status !== "ok") {
+      return { ok: false, error: "Sesi login tidak aktif." }
+    }
+  }
+
+  const { tenant } = resolved.context
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("register_device_token", {
+    p_tenant_id: tenant.tenantId,
+    p_fcm_token: parsed.data.fcmToken,
+    p_platform: parsed.data.platform,
+    p_device_info: parsed.data.deviceInfo,
+  })
+
+  if (error) {
+    console.error("[registerDeviceTokenAction] RPC error:", error)
+    return { ok: false, error: "Gagal mendaftarkan token perangkat." }
+  }
+
+  return { ok: true, error: null }
+}
+
+export async function unregisterDeviceTokenAction(input: {
+  fcmToken: string
+}): Promise<{ ok: boolean; error: string | null }> {
+  const parsed = unregisterDeviceTokenSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: "Parameter token tidak valid." }
+  }
+
+  const supabase = await createClient()
+  const { error } = await supabase.rpc("unregister_device_token", {
+    p_fcm_token: parsed.data.fcmToken,
+  })
+
+  if (error) {
+    console.error("[unregisterDeviceTokenAction] RPC error:", error)
+    return { ok: false, error: "Gagal menonaktifkan token perangkat." }
+  }
+
+  return { ok: true, error: null }
 }
 

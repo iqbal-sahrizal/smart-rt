@@ -1,0 +1,20 @@
+<resources>
+    <!-- Base application theme -->
+    <style name="Theme.SmartRT" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">@color/brand_primary</item>
+        <item name="colorPrimaryDark">@color/brand_primary_dark</item>
+        <item name="colorAccent">@color/brand_teal</item>
+        <item name="android:windowBackground">@color/brand_background</item>
+        <item name="android:statusBarColor">@color/brand_surface</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">@color/brand_surface</item>
+    </style>
+
+    <!-- Splash screen theme: clean brand background during native process initialization -->
+    <style name="Theme.SmartRT.Splash" parent="Theme.SmartRT">
+        <item name="android:windowBackground">@drawable/splash_background</item>
+        <item name="android:statusBarColor">@color/brand_primary</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
+

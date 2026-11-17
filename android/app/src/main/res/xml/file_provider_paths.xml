@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Smart RT — FileProvider path configuration.
+
+    Exposes ONLY app-private cache subdirectories.
+    External storage, shared storage, and arbitrary filesystem paths are NOT exposed.
+
+    cache-path: maps to getCacheDir() — volatile app-private cache.
+    external-cache-path is intentionally NOT included.
+-->
+<paths>
+    <cache-path
+        name="smart_rt_camera_captures"
+        path="camera/" />
+    <cache-path
+        name="smart_rt_private_docs"
+        path="private_docs/" />
+</paths>
+

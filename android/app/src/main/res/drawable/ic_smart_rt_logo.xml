@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <!-- Smart RT Community House & Shield Icon -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48,16 L18,40 L26,40 L26,76 L42,76 L42,56 L54,56 L54,76 L70,76 L70,40 L78,40 Z" />
+    <path
+        android:fillColor="#0D9488"
+        android:pathData="M44,28 L52,28 L52,38 L44,38 Z" />
+</vector>
+
