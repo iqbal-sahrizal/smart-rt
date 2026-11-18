@@ -394,13 +394,13 @@ export function LiveChatRoomView({
   const activeError = localError ?? errorMessage
   const containerClass =
     variant === "floating"
-      ? "flex h-full min-h-0 flex-col overflow-hidden border-0 bg-surface shadow-none"
-      : "flex h-[calc(100dvh-10.5rem)] min-h-[480px] flex-col overflow-hidden border border-border bg-surface shadow-sm md:h-[calc(100dvh-11rem)]"
+      ? "flex h-full min-h-0 flex-col gap-0 overflow-hidden border-0 bg-surface py-0 shadow-none"
+      : "flex h-[calc(100dvh-10.5rem)] min-h-[480px] flex-col gap-0 overflow-hidden border border-border bg-surface py-0 shadow-sm md:h-[calc(100dvh-11rem)]"
 
   return (
     <Card className={containerClass}>
       {/* Header Room */}
-      <div className="flex items-center justify-between gap-2 border-b border-border bg-surface px-3.5 py-2.5 md:px-4 md:py-3">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-surface px-3.5 py-2.5 md:px-4 md:py-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary md:size-10">
             <MessageCircleIcon className="size-4 md:size-5" />
@@ -483,7 +483,7 @@ export function LiveChatRoomView({
 
       {/* Message Timeline */}
       <div
-        className="relative flex-1 overflow-hidden bg-surface-subtle/60"
+        className="relative min-h-0 flex-1 overflow-hidden bg-surface-subtle/60"
         onClick={() => {
           if (longPressedId) setLongPressedId(null)
         }}
@@ -491,7 +491,7 @@ export function LiveChatRoomView({
         <div
           ref={scrollContainerRef}
           onScroll={handleScroll}
-          className="flex h-full flex-col gap-2 overflow-y-auto px-3 py-3 md:px-4"
+          className="flex h-full flex-col gap-2 overflow-y-auto overscroll-contain touch-pan-y px-3 py-3 md:px-4"
         >
           {hasMore && (
             <div className="flex justify-center py-1">
@@ -881,7 +881,7 @@ export function LiveChatRoomView({
       {/* Composer */}
       <form
         onSubmit={handleSend}
-        className="flex items-end gap-2 border-t border-border bg-surface p-2.5 md:p-3"
+        className="flex shrink-0 items-end gap-2 border-t border-border bg-surface p-2.5 md:p-3"
       >
         <input
           ref={fileInputRef}

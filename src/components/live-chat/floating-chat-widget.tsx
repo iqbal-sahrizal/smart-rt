@@ -52,6 +52,29 @@ export function FloatingChatWidget({
 
   const { unreadCount } = useChatUnreadCount(shouldRender)
 
+  // Lock background page scroll & prevent overscroll chaining while floating chat is open
+  React.useEffect(() => {
+    if (!isOpen) return
+    const html = document.documentElement
+    const body = document.body
+    const prevHtmlOverflow = html.style.overflow
+    const prevBodyOverflow = body.style.overflow
+    const prevHtmlOverscroll = html.style.overscrollBehavior
+    const prevBodyOverscroll = body.style.overscrollBehavior
+
+    html.style.overflow = "hidden"
+    body.style.overflow = "hidden"
+    html.style.overscrollBehavior = "none"
+    body.style.overscrollBehavior = "none"
+
+    return () => {
+      html.style.overflow = prevHtmlOverflow
+      body.style.overflow = prevBodyOverflow
+      html.style.overscrollBehavior = prevHtmlOverscroll
+      body.style.overscrollBehavior = prevBodyOverscroll
+    }
+  }, [isOpen])
+
   const openPanel = async () => {
     setIsOpen(true)
     if (bootstrap || isLoading) return
@@ -95,10 +118,10 @@ export function FloatingChatWidget({
           {/* Mobile backdrop */}
           <div
             onClick={() => setIsOpen(false)}
-            className="absolute inset-0 bg-black/40 backdrop-blur-[1px] md:hidden"
+            className="absolute inset-0 touch-none bg-black/40 backdrop-blur-[1px] md:hidden"
           />
 
-          <div className="pointer-events-auto absolute inset-x-0 bottom-0 flex h-[86dvh] flex-col overflow-hidden rounded-t-2xl border border-border bg-surface shadow-2xl md:static md:h-[560px] md:w-[400px] md:rounded-2xl">
+          <div className="pointer-events-auto absolute inset-x-0 bottom-0 flex h-[86dvh] flex-col overflow-hidden overscroll-contain rounded-t-2xl border border-border bg-surface shadow-2xl md:static md:h-[560px] md:w-[400px] md:rounded-2xl">
             {isLoading ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
                 <Loader2Icon className="size-6 animate-spin text-primary" />
