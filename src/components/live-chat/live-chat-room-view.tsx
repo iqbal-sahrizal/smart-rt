@@ -172,6 +172,28 @@ export function LiveChatRoomView({
   const prevMessageCountRef = React.useRef<number>(messages.length)
   const didInitialScrollRef = React.useRef<boolean>(false)
 
+  // Prevent browser pull-to-refresh when pulling down at top of chat timeline
+  React.useEffect(() => {
+    const el = scrollContainerRef.current
+    if (!el) return
+    let startY = 0
+    const onTouchStart = (e: TouchEvent) => {
+      startY = e.touches[0]?.clientY ?? 0
+    }
+    const onTouchMove = (e: TouchEvent) => {
+      const currentY = e.touches[0]?.clientY ?? 0
+      if (el.scrollTop <= 0 && currentY > startY) {
+        e.preventDefault()
+      }
+    }
+    el.addEventListener("touchstart", onTouchStart, { passive: true })
+    el.addEventListener("touchmove", onTouchMove, { passive: false })
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart)
+      el.removeEventListener("touchmove", onTouchMove)
+    }
+  }, [])
+
   const scrollToBottom = React.useCallback((behavior: ScrollBehavior = "smooth") => {
     const el = scrollContainerRef.current
     if (!el) return
