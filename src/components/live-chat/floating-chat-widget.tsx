@@ -59,19 +59,45 @@ export function FloatingChatWidget({
     const body = document.body
     const prevHtmlOverflow = html.style.overflow
     const prevBodyOverflow = body.style.overflow
-    const prevHtmlOverscroll = html.style.overscrollBehavior
-    const prevBodyOverscroll = body.style.overscrollBehavior
+    const prevHtmlOverscroll = html.style.overscrollBehaviorY
+    const prevBodyOverscroll = body.style.overscrollBehaviorY
 
     html.style.overflow = "hidden"
     body.style.overflow = "hidden"
-    html.style.overscrollBehavior = "none"
-    body.style.overscrollBehavior = "none"
+    html.style.overscrollBehaviorY = "none"
+    body.style.overscrollBehaviorY = "none"
+
+    const bridge = (
+      window as unknown as {
+        SmartRtNativeBridge?: { postMessage?: (msg: string) => void }
+      }
+    ).SmartRtNativeBridge
+    try {
+      bridge?.postMessage?.(
+        JSON.stringify({
+          action: "setPullToRefreshLocked",
+          payload: { locked: true },
+        })
+      )
+    } catch {
+      // ignore if outside native WebView
+    }
 
     return () => {
       html.style.overflow = prevHtmlOverflow
       body.style.overflow = prevBodyOverflow
-      html.style.overscrollBehavior = prevHtmlOverscroll
-      body.style.overscrollBehavior = prevBodyOverscroll
+      html.style.overscrollBehaviorY = prevHtmlOverscroll
+      body.style.overscrollBehaviorY = prevBodyOverscroll
+      try {
+        bridge?.postMessage?.(
+          JSON.stringify({
+            action: "setPullToRefreshLocked",
+            payload: { locked: false },
+          })
+        )
+      } catch {
+        // ignore
+      }
     }
   }, [isOpen])
 

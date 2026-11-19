@@ -59,6 +59,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private var isErrorStateVisible: Boolean = false
+    private var isPullToRefreshLocked: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // 1. Install splash screen transition before super.onCreate
@@ -184,10 +185,13 @@ class MainActivity : AppCompatActivity() {
     private fun setupPullToRefresh() {
         binding.swipeRefreshLayout.setColorSchemeResources(R.color.brand_primary)
         binding.swipeRefreshLayout.setOnChildScrollUpCallback { _, _ ->
-            !canTriggerPullToRefresh(binding.webView.scrollY, isErrorStateVisible)
+            isPullToRefreshLocked ||
+                (binding.webView.url?.contains("/resident/chat") == true) ||
+                !canTriggerPullToRefresh(binding.webView.scrollY, isErrorStateVisible)
         }
         binding.swipeRefreshLayout.setOnRefreshListener {
-            if (canTriggerPullToRefresh(binding.webView.scrollY, isErrorStateVisible)) {
+            val blocked = isPullToRefreshLocked || (binding.webView.url?.contains("/resident/chat") == true)
+            if (!blocked && canTriggerPullToRefresh(binding.webView.scrollY, isErrorStateVisible)) {
                 binding.webView.reload()
             } else {
                 binding.swipeRefreshLayout.isRefreshing = false
@@ -323,6 +327,16 @@ class MainActivity : AppCompatActivity() {
                         mimeType = mimeType,
                         isDownload = isDownload
                     )
+                }
+            }
+
+            override fun onPullToRefreshLockChanged(locked: Boolean) {
+                runOnUiThread {
+                    isPullToRefreshLocked = locked
+                    binding.swipeRefreshLayout.isEnabled = !locked
+                    if (locked) {
+                        binding.swipeRefreshLayout.isRefreshing = false
+                    }
                 }
             }
         }

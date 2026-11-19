@@ -62,6 +62,7 @@ class NativeBridgeMessageProcessor(
         fun onLogoutNotified()
         fun onNotificationPermissionRequested()
         fun onDocumentActionRequested(path: String, fileName: String, mimeType: String, isDownload: Boolean)
+        fun onPullToRefreshLockChanged(locked: Boolean) {}
     }
 
     companion object {
@@ -141,6 +142,15 @@ class NativeBridgeMessageProcessor(
                     callbacks.onLogoutNotified()
                     val data = JSONObject().apply {
                         put("acknowledged", true)
+                    }
+                    NativeBridgeResponse.Success(action, data, messageId)
+                }
+
+                "setPullToRefreshLocked" -> {
+                    val locked = payload?.optBoolean("locked", false) ?: false
+                    callbacks.onPullToRefreshLockChanged(locked)
+                    val data = JSONObject().apply {
+                        put("locked", locked)
                     }
                     NativeBridgeResponse.Success(action, data, messageId)
                 }
