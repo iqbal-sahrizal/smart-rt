@@ -22,6 +22,7 @@ class SmartRtNativeBridgeTest {
 
     private var logoutCalled = false
     private var notifPermissionCalled = false
+    private var pullToRefreshLocked: Boolean? = null
     private var lastDocAction: DocumentAction? = null
 
     data class DocumentAction(
@@ -48,6 +49,10 @@ class SmartRtNativeBridgeTest {
         ) {
             lastDocAction = DocumentAction(path, fileName, mimeType, isDownload)
         }
+
+        override fun onPullToRefreshLockChanged(locked: Boolean) {
+            pullToRefreshLocked = locked
+        }
     }
 
     @Before
@@ -55,6 +60,7 @@ class SmartRtNativeBridgeTest {
         originPolicy = TrustedOriginPolicy(allowedHost = "smart-rt-staging.vercel.app")
         logoutCalled = false
         notifPermissionCalled = false
+        pullToRefreshLocked = null
         lastDocAction = null
 
         processor = NativeBridgeMessageProcessor(
@@ -375,5 +381,34 @@ class SmartRtNativeBridgeTest {
         assertEquals("requestNotificationPermission", success.action)
         assertEquals("requested", success.data.getString("status"))
         assertTrue(notifPermissionCalled)
+    }
+
+    @Test
+    fun setPullToRefreshLocked_updatesCallbackLockState() {
+        val lockMsg = JSONObject().apply {
+            put("action", "setPullToRefreshLocked")
+            put("payload", JSONObject().apply { put("locked", true) })
+        }.toString()
+
+        val lockResp = processor.processIncomingMessage(
+            rawMessage = lockMsg,
+            sourceOrigin = trustedOrigin,
+            isMainFrame = true
+        )
+        assertTrue(lockResp is NativeBridgeResponse.Success)
+        assertEquals(true, pullToRefreshLocked)
+
+        val unlockMsg = JSONObject().apply {
+            put("action", "setPullToRefreshLocked")
+            put("payload", JSONObject().apply { put("locked", false) })
+        }.toString()
+
+        val unlockResp = processor.processIncomingMessage(
+            rawMessage = unlockMsg,
+            sourceOrigin = trustedOrigin,
+            isMainFrame = true
+        )
+        assertTrue(unlockResp is NativeBridgeResponse.Success)
+        assertEquals(false, pullToRefreshLocked)
     }
 }

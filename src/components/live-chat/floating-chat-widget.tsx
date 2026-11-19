@@ -29,6 +29,20 @@ const HIDDEN_PATHS = [
   "/obrolan",
 ]
 
+function notifyNativePullToRefreshLock(locked: boolean) {
+  if (typeof window === "undefined") return
+  try {
+    window.SmartRTNative?.postMessage(
+      JSON.stringify({
+        action: "setPullToRefreshLocked",
+        payload: { locked },
+      })
+    )
+  } catch {
+    // ignore outside native WebView
+  }
+}
+
 export function FloatingChatWidget({
   scope,
   enabled = true,
@@ -52,73 +66,36 @@ export function FloatingChatWidget({
 
   const { unreadCount } = useChatUnreadCount(shouldRender)
 
-  // Lock background page scroll & prevent overscroll chaining while floating chat is open
+  // Lock background page scroll & disable native Android SwipeRefreshLayout while floating chat is open
   React.useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen) {
+      notifyNativePullToRefreshLock(false)
+      return
+    }
     const html = document.documentElement
     const body = document.body
-    const scrollY = window.scrollY
     const prevHtmlOverflow = html.style.overflow
     const prevBodyOverflow = body.style.overflow
-    const prevBodyPosition = body.style.position
-    const prevBodyTop = body.style.top
-    const prevBodyLeft = body.style.left
-    const prevBodyRight = body.style.right
-    const prevBodyWidth = body.style.width
     const prevHtmlOverscroll = html.style.overscrollBehaviorY
     const prevBodyOverscroll = body.style.overscrollBehaviorY
 
     html.style.overflow = "hidden"
-    html.style.overscrollBehaviorY = "none"
     body.style.overflow = "hidden"
+    html.style.overscrollBehaviorY = "none"
     body.style.overscrollBehaviorY = "none"
-    body.style.position = "fixed"
-    body.style.top = `-${scrollY}px`
-    body.style.left = "0"
-    body.style.right = "0"
-    body.style.width = "100%"
-
-    const bridge = (
-      window as unknown as {
-        SmartRtNativeBridge?: { postMessage?: (msg: string) => void }
-      }
-    ).SmartRtNativeBridge
-    try {
-      bridge?.postMessage?.(
-        JSON.stringify({
-          action: "setPullToRefreshLocked",
-          payload: { locked: true },
-        })
-      )
-    } catch {
-      // ignore if outside native WebView
-    }
+    notifyNativePullToRefreshLock(true)
 
     return () => {
       html.style.overflow = prevHtmlOverflow
-      html.style.overscrollBehaviorY = prevHtmlOverscroll
       body.style.overflow = prevBodyOverflow
+      html.style.overscrollBehaviorY = prevHtmlOverscroll
       body.style.overscrollBehaviorY = prevBodyOverscroll
-      body.style.position = prevBodyPosition
-      body.style.top = prevBodyTop
-      body.style.left = prevBodyLeft
-      body.style.right = prevBodyRight
-      body.style.width = prevBodyWidth
-      window.scrollTo(0, scrollY)
-      try {
-        bridge?.postMessage?.(
-          JSON.stringify({
-            action: "setPullToRefreshLocked",
-            payload: { locked: false },
-          })
-        )
-      } catch {
-        // ignore
-      }
+      notifyNativePullToRefreshLock(false)
     }
   }, [isOpen])
 
   const openPanel = async () => {
+    notifyNativePullToRefreshLock(true)
     setIsOpen(true)
     if (bootstrap || isLoading) return
     setIsLoading(true)
@@ -164,7 +141,11 @@ export function FloatingChatWidget({
             className="absolute inset-0 touch-none bg-black/40 backdrop-blur-[1px] md:hidden"
           />
 
-          <div className="pointer-events-auto absolute inset-x-0 bottom-0 flex h-[86dvh] flex-col overflow-hidden overscroll-contain rounded-t-2xl border border-border bg-surface shadow-2xl md:static md:h-[560px] md:w-[400px] md:rounded-2xl">
+          <div
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+            className="pointer-events-auto absolute inset-x-0 bottom-0 flex h-[86dvh] max-h-[86dvh] min-h-0 flex-col overflow-hidden overscroll-y-contain rounded-t-2xl border border-border bg-surface shadow-2xl md:static md:h-[560px] md:max-h-[82dvh] md:w-[400px] md:rounded-2xl"
+          >
             {isLoading ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
                 <Loader2Icon className="size-6 animate-spin text-primary" />

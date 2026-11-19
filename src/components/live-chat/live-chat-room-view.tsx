@@ -172,18 +172,24 @@ export function LiveChatRoomView({
   const prevMessageCountRef = React.useRef<number>(messages.length)
   const didInitialScrollRef = React.useRef<boolean>(false)
 
-  // Prevent browser pull-to-refresh when pulling down at top of chat timeline
+  // Prevent browser pull-to-refresh when pulling down at top/bottom bounds of chat timeline
   React.useEffect(() => {
     const el = scrollContainerRef.current
     if (!el) return
     let startY = 0
     const onTouchStart = (e: TouchEvent) => {
       startY = e.touches[0]?.clientY ?? 0
+      e.stopPropagation()
     }
     const onTouchMove = (e: TouchEvent) => {
+      e.stopPropagation()
       const currentY = e.touches[0]?.clientY ?? 0
-      if (el.scrollTop <= 0 && currentY > startY) {
-        e.preventDefault()
+      const deltaY = currentY - startY
+      const atTop = el.scrollTop <= 0
+      const atBottom =
+        el.scrollHeight - el.scrollTop - el.clientHeight <= 1
+      if ((atTop && deltaY > 0) || (atBottom && deltaY < 0)) {
+        if (e.cancelable) e.preventDefault()
       }
     }
     el.addEventListener("touchstart", onTouchStart, { passive: true })
@@ -220,6 +226,16 @@ export function LiveChatRoomView({
   // Mark room as read when panel/page is visible and messages are shown
   React.useEffect(() => {
     if (!isVisible) return
+    try {
+      window.SmartRTNative?.postMessage(
+        JSON.stringify({
+          action: "setPullToRefreshLocked",
+          payload: { locked: true },
+        })
+      )
+    } catch {
+      // ignore outside native WebView
+    }
     const latest = messages[messages.length - 1]
     if (!latest) {
       void markAsRead(undefined)
@@ -228,7 +244,21 @@ export function LiveChatRoomView({
     if (isNearBottomRef.current || messages.length > 0) {
       void markAsRead(latest.id)
     }
-  }, [isVisible, markAsRead, messages])
+    return () => {
+      if (variant === "page") {
+        try {
+          window.SmartRTNative?.postMessage(
+            JSON.stringify({
+              action: "setPullToRefreshLocked",
+              payload: { locked: false },
+            })
+          )
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }, [isVisible, markAsRead, messages, variant])
 
   React.useEffect(() => {
     return () => {
@@ -416,8 +446,8 @@ export function LiveChatRoomView({
   const activeError = localError ?? errorMessage
   const containerClass =
     variant === "floating"
-      ? "flex h-full min-h-0 flex-col gap-0 overflow-hidden border-0 bg-surface py-0 shadow-none"
-      : "flex h-[calc(100dvh-10.5rem)] min-h-[480px] flex-col gap-0 overflow-hidden border border-border bg-surface py-0 shadow-sm md:h-[calc(100dvh-11rem)]"
+      ? "flex h-full min-h-0 flex-1 flex-col gap-0 overflow-hidden overscroll-y-contain border-0 bg-surface py-0 shadow-none"
+      : "flex h-[calc(100dvh-10.5rem)] min-h-[480px] flex-col gap-0 overflow-hidden overscroll-y-contain border border-border bg-surface py-0 shadow-sm md:h-[calc(100dvh-11rem)]"
 
   return (
     <Card className={containerClass}>
@@ -505,7 +535,7 @@ export function LiveChatRoomView({
 
       {/* Message Timeline */}
       <div
-        className="relative min-h-0 flex-1 overflow-hidden bg-surface-subtle/60"
+        className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-subtle/60"
         onClick={() => {
           if (longPressedId) setLongPressedId(null)
         }}
@@ -513,7 +543,7 @@ export function LiveChatRoomView({
         <div
           ref={scrollContainerRef}
           onScroll={handleScroll}
-          className="flex h-full flex-col gap-2 overflow-y-auto overscroll-contain touch-pan-y px-3 py-3 md:px-4"
+          className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-y-contain touch-pan-y px-3 py-3 md:px-4"
         >
           {hasMore && (
             <div className="flex justify-center py-1">

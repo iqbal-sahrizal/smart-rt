@@ -182,12 +182,19 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
     private fun setupPullToRefresh() {
         binding.swipeRefreshLayout.setColorSchemeResources(R.color.brand_primary)
         binding.swipeRefreshLayout.setOnChildScrollUpCallback { _, _ ->
             isPullToRefreshLocked ||
                 (binding.webView.url?.contains("/resident/chat") == true) ||
                 !canTriggerPullToRefresh(binding.webView.scrollY, isErrorStateVisible)
+        }
+        binding.webView.setOnTouchListener { v, _ ->
+            if (isPullToRefreshLocked || (binding.webView.url?.contains("/resident/chat") == true)) {
+                v.parent?.requestDisallowInterceptTouchEvent(true)
+            }
+            false
         }
         binding.swipeRefreshLayout.setOnRefreshListener {
             val blocked = isPullToRefreshLocked || (binding.webView.url?.contains("/resident/chat") == true)
@@ -228,6 +235,8 @@ class MainActivity : AppCompatActivity() {
         return object : SmartRtWebViewListener {
             override fun onPageLoadingStarted(url: String?) {
                 hideErrorOverlay()
+                isPullToRefreshLocked = false
+                binding.swipeRefreshLayout.isEnabled = true
                 binding.progressBar.visibility = View.VISIBLE
             }
 
@@ -334,6 +343,7 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     isPullToRefreshLocked = locked
                     binding.swipeRefreshLayout.isEnabled = !locked
+                    binding.webView.parent?.requestDisallowInterceptTouchEvent(locked)
                     if (locked) {
                         binding.swipeRefreshLayout.isRefreshing = false
                     }
